@@ -71,7 +71,7 @@ def send_database():
                 username = f"{base_username}{i}"
 
             email = f"{username}@hcmut.edu.vn"
-            password_hash = "password123"  # nếu muốn thì sau này hash thật
+            password_hash = "password123"
 
             sql_insert_user = """
                 INSERT INTO "User" ("Role", Username, Email, "Password_Hash")
@@ -167,7 +167,7 @@ def send_database():
                 )
 
         conn.commit()
-        print("✅ Done inserting User / Student / Lecturer / Manager")
+        print("Done inserting User / Student / Lecturer / Manager")
 
     except Exception as error:
         print("Error in send_database:", error)
@@ -223,7 +223,7 @@ def send_course_database(csv_path="mon_all.csv"):
                 count += 1
 
         conn.commit()
-        print(f"✅ Inserted {count} courses from CSV")
+        print(f"Inserted {count} courses from CSV")
 
     except Exception as error:
         print("Error while inserting courses:", error)
@@ -256,14 +256,14 @@ def send_enroll_data():
         cur.execute('SELECT User_id FROM "Student";')
         student_ids = [row[0] for row in cur.fetchall()]
         if not student_ids:
-            print("❌ No students found.")
+            print("No students found.")
             return
 
         # Lấy courses + capacity
         cur.execute('SELECT Course_id, Capacity FROM "Course";')
         course_rows = cur.fetchall()
         if not course_rows:
-            print("❌ No courses found.")
+            print("No courses found.")
             return
 
         course_capacity = {row[0]: row[1] for row in course_rows}
@@ -282,7 +282,7 @@ def send_enroll_data():
                 remaining_slots[cid] = remain
 
         if not remaining_slots:
-            print("❌ All courses are full. Cannot enroll anyone.")
+            print("All courses are full. Cannot enroll anyone.")
             return
 
         sql_insert_enroll = """
@@ -296,7 +296,7 @@ def send_enroll_data():
         for student_id in student_ids:
             available_courses = [cid for cid, r in remaining_slots.items() if r > 0]
             if not available_courses:
-                print("⚠ All courses filled, stop assigning more enrollments.")
+                print("All courses filled, stop assigning more enrollments.")
                 break
 
             desired_courses = random.randint(3, 7)
@@ -315,7 +315,7 @@ def send_enroll_data():
                 total_inserted += 1
 
         conn.commit()
-        print(f"✅ Inserted {total_inserted} enrollments (respecting capacity).")
+        print(f"Inserted {total_inserted} enrollments (respecting capacity).")
 
     except Exception as error:
         print("Error inserting enroll data:", error)
@@ -355,7 +355,7 @@ def send_attendance_data(num_records=50):
             cur.execute(sql_insert_att, (date, status))
 
         conn.commit()
-        print(f"✅ Inserted {num_records} attendance records.")
+        print(f"Inserted {num_records} attendance records.")
 
     except Exception as error:
         print("Error in send_attendance_data:", error)
@@ -387,21 +387,21 @@ def send_attendance_detail_data():
         cur.execute('SELECT Record_id FROM "Attendance_Record";')
         record_ids = [row[0] for row in cur.fetchall()]
         if not record_ids:
-            print("❌ No attendance records found — cannot insert.")
+            print("No attendance records found — cannot insert.")
             return
 
         # Students
         cur.execute('SELECT User_id FROM "Student";')
         student_ids = [row[0] for row in cur.fetchall()]
         if not student_ids:
-            print("❌ No students found — cannot insert.")
+            print("No students found — cannot insert.")
             return
 
         # Courses
         cur.execute('SELECT Course_id FROM "Course";')
         course_ids = [row[0] for row in cur.fetchall()]
         if not course_ids:
-            print("❌ No courses found — cannot insert.")
+            print("No courses found — cannot insert.")
             return
 
         sql_insert_detail = """
@@ -424,7 +424,7 @@ def send_attendance_detail_data():
                 inserted_count += 1
 
         conn.commit()
-        print(f"✅ Inserted {inserted_count} attendance detail rows.")
+        print(f"Inserted {inserted_count} attendance detail rows.")
 
     except Exception as error:
         print("Error in send_attendance_detail_data:", error)
@@ -466,7 +466,7 @@ def send_materials_data():
         cur.execute('SELECT Course_id, Course_code FROM "Course";')
         courses = cur.fetchall()
         if not courses:
-            print("❌ No courses found — cannot insert materials.")
+            print("No courses found — cannot insert materials.")
             return
 
         sql_insert_material = """
@@ -492,7 +492,7 @@ def send_materials_data():
                 count += 1
 
         conn.commit()
-        print(f"✅ Inserted {count} materials.")
+        print(f"Inserted {count} materials.")
 
     except Exception as error:
         print("Error in send_materials_data:", error)
@@ -536,14 +536,14 @@ def send_feedback_data():
         cur.execute('SELECT User_id FROM "Student";')
         student_ids = [row[0] for row in cur.fetchall()]
         if not student_ids:
-            print("❌ No students found.")
+            print("No students found.")
             return
 
         # courses
         cur.execute('SELECT Course_id FROM "Course";')
         course_ids = [row[0] for row in cur.fetchall()]
         if not course_ids:
-            print("❌ No courses found.")
+            print("No courses found.")
             return
 
         sql_insert_feedback = """
@@ -566,7 +566,7 @@ def send_feedback_data():
             count += 1
 
         conn.commit()
-        print(f"✅ Inserted {count} feedback rows.")
+        print(f"Inserted {count} feedback rows.")
 
     except Exception as error:
         print("Error in send_feedback_data:", error)
@@ -621,7 +621,7 @@ def send_prediction_data():
         )
         students = cur.fetchall()
         if not students:
-            print("❌ No students found.")
+            print("No students found.")
             return
 
         sql_insert_prediction = """
@@ -661,7 +661,7 @@ def send_prediction_data():
             count += 1
 
         conn.commit()
-        print(f"✅ Inserted {count} prediction rows.")
+        print(f"Inserted {count} prediction rows.")
 
     except Exception as error:
         print("Error in send_prediction_data:", error)
@@ -705,7 +705,7 @@ def send_assignment_data():
             count += 1
 
         conn.commit()
-        print(f"✅ Inserted {count} assignments.")
+        print(f"Inserted {count} assignments.")
 
     except Exception as error:
         print("Error in send_assignment_data:", error)
@@ -717,6 +717,82 @@ def send_assignment_data():
         if conn:
             conn.close()
         print("PostgreSQL connection is closed (send_assignment_data)")
+
+def send_submission_data():
+    conn = None
+    cur = None
+
+    try:
+        conn = psycopg2.connect(
+            dbname=DB_NAME,
+            user=DB_USER,
+            password=DB_PASS,
+            host=DB_HOST,
+            port=DB_PORT
+        )
+        cur = conn.cursor()
+        print("Start inserting submission data...")
+
+        # --- Lấy danh sách assignment ---
+        cur.execute('SELECT Assignment_id FROM "Assignment";')
+        assignment_ids = [row[0] for row in cur.fetchall()]
+        if not assignment_ids:
+            print("No assignments found — cannot insert submissions.")
+            return
+
+        # --- Lấy danh sách student ---
+        cur.execute('SELECT User_id FROM "Student";')
+        student_ids = [row[0] for row in cur.fetchall()]
+        if not student_ids:
+            print("No students found — cannot insert submissions.")
+            return
+
+        sql_insert_submission = """
+            INSERT INTO "Submission" (Assignment_id, Student_id, Score, File_path)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (Assignment_id, Student_id) DO NOTHING;
+        """
+
+        total_inserted = 0
+
+        for assignment_id in assignment_ids:
+            # Số sinh viên nộp bài cho assignment này
+            max_sub = min(30, len(student_ids))
+            if max_sub == 0:
+                continue
+
+            num_submissions = random.randint(10, max_sub)
+
+            chosen_students = random.sample(student_ids, k=num_submissions)
+
+            for sid in chosen_students:
+                # 1 phần nhỏ không có điểm (chưa chấm)
+                if random.random() < 0.15:
+                    score = None
+                else:
+                    score = round(random.uniform(4.0, 10.0), 2)
+
+                # File path unique theo assignment + student
+                file_path = f"/submissions/assign_{assignment_id}/stud_{sid}.pdf"
+
+                cur.execute(sql_insert_submission, (assignment_id, sid, score, file_path))
+                total_inserted += 1
+
+        conn.commit()
+        print(f"Inserted {total_inserted} submissions.")
+
+    except Exception as error:
+        print("Error in send_submission_data:", error)
+        if conn:
+            conn.rollback()
+
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+        print("PostgreSQL connection is closed (send_submission_data)")
+
 
 
 # =========================
@@ -733,3 +809,4 @@ if __name__ == "__main__":
     send_feedback_data()
     send_prediction_data()
     send_assignment_data()
+    send_submission_data()

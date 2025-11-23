@@ -77,7 +77,7 @@ CREATE TABLE "Course" (
 
 CREATE TABLE "Feedback" (
     Feedback_id SERIAL PRIMARY KEY,
-    Content     VARCHAR(500),
+    "Content"     VARCHAR(500),
     Rating      INT NOT NULL DEFAULT 1 CHECK (Rating >= 1 AND Rating <= 5),
     Student_id  INT NOT NULL,
     Course_id   INT NOT NULL,
@@ -93,10 +93,10 @@ CREATE TABLE "Feedback" (
 
 CREATE TABLE "Attendance_Detail" (
     Course_id            INT,
-    Attendance_Record_id INT,
+    Record_id INT,
     Student_id           INT,
     CONSTRAINT fk_check_attendance_record
-        FOREIGN KEY (Attendance_Record_id)
+        FOREIGN KEY (Record_id)
         REFERENCES "Attendance_Record"(Record_id)
         ON DELETE CASCADE
         ON UPDATE CASCADE,
@@ -110,7 +110,7 @@ CREATE TABLE "Attendance_Detail" (
         REFERENCES "Course"(Course_id)
         ON DELETE CASCADE
         ON UPDATE CASCADE,
-    PRIMARY KEY (Course_id, Attendance_Record_id, Student_id)
+    PRIMARY KEY (Course_id, Record_id, Student_id)
 );
 
 CREATE TABLE "Materials" (
@@ -182,6 +182,21 @@ CREATE TABLE "Activity_Log" (
         ON DELETE CASCADE
 );
 
+SELECT * FROM "User";
+SELECT * FROM "Student";
+SELECT * FROM "Lecturer";
+SELECT * FROM "Manager";
+SELECT * FROM ;
+SELECT * FROM ;
+SELECT * FROM ;
+SELECT * FROM ;
+SELECT * FROM ;
+SELECT * FROM ;
+SELECT * FROM ;
+SELECT * FROM ;
+SELECT * FROM ;
+SELECT * FROM ;
+
 TRUNCATE TABLE
     "Attendance_Detail",
     "Feedback",
@@ -194,7 +209,9 @@ TRUNCATE TABLE
     "Lecturer",
     "Manager",
     "Course",
-    "User"
+    "User",
+    "Submission",
+    "Activity_Log"
 RESTART IDENTITY CASCADE;
 
 DROP TABLE IF EXISTS
@@ -209,5 +226,7 @@ DROP TABLE IF EXISTS
     "Lecturer",
     "Manager",
     "Course",
-    "User"
+    "User",
+    "Submission",
+    "Activity_Log"
 CASCADE;
