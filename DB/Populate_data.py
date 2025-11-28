@@ -3,11 +3,9 @@ from faker import Faker
 import csv
 import random
 from datetime import datetime
-import Fake_info  # module của bạn để clean tên cho email
+import Fake_info
+import pymongo
 
-# =========================
-# Cấu hình database
-# =========================
 DB_NAME = "LMS"
 DB_USER = "postgres"
 DB_PASS = "hung"
@@ -16,21 +14,14 @@ DB_PORT = "5432"
 
 fake = Faker("vi_VN")
 
-
-# =========================
-# Helper: tạo MSSV giả
-# =========================
 def create_student_id():
     enroll_year = fake.random_element(elements=(2020, 2021, 2022, 2023, 2024, 2025))
-    id_prefix = f"{enroll_year % 100}5"  # vd: 205xxx
+    id_prefix = f"{enroll_year % 100}5"
     id_suffix = fake.numerify(text="####")
     student_id = f"{id_prefix}{id_suffix}"
     return student_id
 
 
-# =========================
-# 1. Seed User + Student/Lecturer/Manager
-# =========================
 def send_database():
     conn = None
     cur = None
@@ -44,8 +35,7 @@ def send_database():
 
         print("Start inserting User / Student / Lecturer / Manager ...")
 
-        for i in range(50):  # tạo khoảng ~50 user, tỉ lệ student cao hơn
-            # Tăng tỉ lệ Student
+        for i in range(50):
             role = random.choices(
                 ["Student", "Lecturer", "Manager"],
                 weights=[0.75, 0.2, 0.05]
@@ -181,9 +171,6 @@ def send_database():
         print("PostgreSQL connection is closed (send_database)")
 
 
-# =========================
-# 2. Seed Course từ CSV mon_all.csv
-# =========================
 def send_course_database(csv_path="mon_all.csv"):
     conn = None
     cur = None
@@ -236,10 +223,6 @@ def send_course_database(csv_path="mon_all.csv"):
             conn.close()
         print("PostgreSQL connection is closed (send_course_database)")
 
-
-# =========================
-# 3. Seed Enroll (đăng ký môn) có kiểm tra Capacity
-# =========================
 def send_enroll_data():
     conn = None
     cur = None
@@ -328,10 +311,6 @@ def send_enroll_data():
             conn.close()
         print("PostgreSQL connection closed (send_enroll_data)")
 
-
-# =========================
-# 4. Seed Attendance_Record (Rec001, Rec002, ...)
-# =========================
 def send_attendance_data(num_records=50):
     conn = None
     cur = None
@@ -368,10 +347,6 @@ def send_attendance_data(num_records=50):
             conn.close()
         print("PostgreSQL connection is closed (send_attendance_data)")
 
-
-# =========================
-# 5. Seed Attendance_Detail
-# =========================
 def send_attendance_detail_data():
     conn = None
     cur = None
@@ -437,10 +412,6 @@ def send_attendance_detail_data():
             conn.close()
         print("PostgreSQL connection is closed (send_attendance_detail_data)")
 
-
-# =========================
-# 6. Seed Materials
-# =========================
 def send_materials_data():
     conn = None
     cur = None
@@ -505,10 +476,6 @@ def send_materials_data():
             conn.close()
         print("PostgreSQL connection is closed (send_materials_data)")
 
-
-# =========================
-# 7. Seed Feedback
-# =========================
 def send_feedback_data():
     conn = None
     cur = None
@@ -579,10 +546,6 @@ def send_feedback_data():
             conn.close()
         print("PostgreSQL connection is closed (send_feedback_data)")
 
-
-# =========================
-# 8. Seed Prediction
-# =========================
 def generate_recommendations(current_gpa, predicted_gpa):
     rec = []
 
@@ -674,10 +637,6 @@ def send_prediction_data():
             conn.close()
         print("PostgreSQL connection is closed (send_prediction_data)")
 
-
-# =========================
-# 9. Seed Assignment (độc lập, chưa gắn Course)
-# =========================
 def send_assignment_data():
     conn = None
     cur = None
@@ -794,12 +753,7 @@ def send_submission_data():
         print("PostgreSQL connection is closed (send_submission_data)")
 
 
-
-# =========================
-# Main
-# =========================
 if __name__ == "__main__":
-    # Bạn có thể comment/bỏ comment từng hàm tùy thứ tự muốn chạy
     send_database()
     send_course_database()
     send_enroll_data()
