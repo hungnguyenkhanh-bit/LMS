@@ -12,6 +12,10 @@ DB_PASS = "hung"
 DB_HOST = "localhost"
 DB_PORT = "5432"
 
+MONGO_URI = "mongodb://localhost:27017/"
+MONGO_DB_NAME = "LMS_Logs"
+MONGO_COLLECTION = "activity_logs"
+
 fake = Faker("vi_VN")
 
 def create_student_id():
@@ -20,7 +24,6 @@ def create_student_id():
     id_suffix = fake.numerify(text="####")
     student_id = f"{id_prefix}{id_suffix}"
     return student_id
-
 
 def send_database():
     conn = None
@@ -752,6 +755,72 @@ def send_submission_data():
             conn.close()
         print("PostgreSQL connection is closed (send_submission_data)")
 
+def seed_mongo_activity_logs():
+    pg_conn = None
+    mongo_client = None
+    
+    try:
+        # 1. Kết nối PostgreSQL để lấy User ID thực
+        pg_conn = psycopg2.connect(
+            dbname=DB_NAME, user=DB_USER,
+            password=DB_PASS, host=DB_HOST, port=DB_PORT
+        )
+        pg_cur = pg_conn.cursor()
+        pg_cur.execute('SELECT User_id FROM "User";')
+        user_ids = [row[0] for row in pg_cur.fetchall()]
+        
+        if not user_ids:
+            print("Chưa có User nào trong PostgreSQL. Hãy chạy seed User trước.")
+            return
+
+        # 2. Kết nối MongoDB
+        mongo_client = pymongo.MongoClient(MONGO_URI)
+        db = mongo_client[MONGO_DB_NAME]
+        collection = db[MONGO_COLLECTION]
+        
+        # Xóa log cũ (nếu muốn làm sạch để test)
+        # collection.delete_many({}) 
+
+        print("Bắt đầu tạo Activity Logs vào MongoDB...")
+        
+        logs_to_insert = []
+        
+        actions_map = {
+            "Login": {"type": "auth", "details": lambda: {"browser": fake.chrome(), "os": "Windows 11"}},
+            "Submit Assignment": {"type": "academic", "details": lambda: {"assignment_id": random.randint(1, 50), "file_size": f"{random.randint(1, 10)}MB"}},
+            "View Course": {"type": "academic", "details": lambda: {"course_code": f"CO{random.randint(1000, 4000)}", "duration_sec": random.randint(10, 3600)}},
+            "Update Profile": {"type": "system", "details": lambda: {"changed_fields": ["avatar", "phone"]}},
+            "Logout": {"type": "auth", "details": lambda: {}}
+        }
+
+        # Tạo 500 log mẫu
+        for _ in range(500):
+            action_name = random.choice(list(actions_map.keys()))
+            action_config = actions_map[action_name]
+            
+            log_entry = {
+                "user_id": random.choice(user_ids), # ID này khớp với Postgres
+                "action": action_name,
+                "type": action_config["type"],
+                "timestamp": fake.date_time_between(start_date="-30d", end_date="now"),
+                "ip_address": fake.ipv4(),
+                "user_agent": fake.user_agent(),
+                # ĐÂY LÀ SỨC MẠNH CỦA MONGODB: Cấu trúc details linh động
+                "details": action_config["details"]() 
+            }
+            logs_to_insert.append(log_entry)
+
+        # Insert hàng loạt (nhanh hơn)
+        if logs_to_insert:
+            result = collection.insert_many(logs_to_insert)
+            print(f"-> Đã insert thành công {len(result.inserted_ids)} logs vào MongoDB.")
+
+    except Exception as e:
+        print(f"Lỗi: {e}")
+        
+    finally:
+        if pg_conn: pg_conn.close()
+        if mongo_client: mongo_client.close()
 
 if __name__ == "__main__":
     send_database()
@@ -764,3 +833,4 @@ if __name__ == "__main__":
     send_prediction_data()
     send_assignment_data()
     send_submission_data()
+    seed_mongo_activity_logs()
