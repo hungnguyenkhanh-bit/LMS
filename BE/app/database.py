@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 load_dotenv()
 
 
+
 class Settings:
     """Simple settings loader for database connection."""
 
