@@ -16,7 +16,8 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 
     {/* Các route sau khi đã đăng nhập – dùng AppLayout */}
     <Route element={<AppLayout />}>
-      <Route path="/" element={<StudentDashboardPage />} />
+      <Route path="/student-dashboard" element={<StudentDashboardPage />} />
+
       {/* sau này em add thêm các page khác ở đây */}
     </Route>
   </Routes>

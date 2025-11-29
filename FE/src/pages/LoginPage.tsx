@@ -1,6 +1,24 @@
-import React from "react";
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const LoginPage: React.FC = () => {
+  const navigate = useNavigate();
+
+  // State điều khiển form
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+
+  // Fake login function
+  const handleLogin = () => {
+    if (username.trim() === "" || password.trim() === "") {
+      alert("Please enter username and password!");
+      return;
+    }
+
+    // Tạm thời login fake → navigate tới dashboard
+    navigate("/student-dashboard");
+  };
+
   return (
     <div className="auth-shell">
       {/* Top bar */}
@@ -27,6 +45,8 @@ const LoginPage: React.FC = () => {
                 className="form-control"
                 type="text"
                 placeholder="Enter your username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
               />
             </div>
 
@@ -39,6 +59,8 @@ const LoginPage: React.FC = () => {
                 className="form-control"
                 type="password"
                 placeholder="Enter your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
               />
             </div>
 
@@ -47,14 +69,16 @@ const LoginPage: React.FC = () => {
               <span>Warn me before logging me into other sites.</span>
             </label>
 
-            <button className="btn-login">Login</button>
+            <button className="btn-login" onClick={handleLogin}>
+              Login
+            </button>
 
             <div className="auth-forgot">
               <a href="#">Forgot password?</a>
             </div>
           </div>
 
-          {/* RIGHT: note + support */}
+          {/* RIGHT note */}
           <div>
             <div style={{ textAlign: "right", fontSize: 12, marginBottom: 16 }}>
               <span style={{ marginRight: 4 }}>Languages:</span>
@@ -67,23 +91,15 @@ const LoginPage: React.FC = () => {
             <div className="auth-right-title">Please note</div>
             <p className="auth-right-text">
               The Login page enables single sign-on to multiple websites at
-              E-learning. This means that you only have to enter your user name
-              and password once for websites that subscribe to the Login page.
-            </p>
-            <p className="auth-right-text">
-              You will need to use your E-learning Username and password to log
-              in to this site. The &quot;E-learning&quot; account provides
-              access to many resources including the E-learning Information
-              System, e-mail, ...
-            </p>
-            <p className="auth-right-text">
-              For security reasons, please Exit your web browser when you are
-              done accessing services that require authentication!
+              E-learning...
             </p>
 
             <div className="auth-right-section-title">Technical support</div>
             <p className="auth-right-text">
-              E-mail: <a href="mailto:support@elearning.edu.vn">support@elearning.edu.vn</a>
+              E-mail:{" "}
+              <a href="mailto:support@elearning.edu.vn">
+                support@elearning.edu.vn
+              </a>
               <br />
               Tel: (84-8) 38647256 - 7204
             </p>
