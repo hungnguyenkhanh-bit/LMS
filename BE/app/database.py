@@ -10,16 +10,16 @@ from sqlalchemy.orm import sessionmaker
 load_dotenv()
 
 
+
 class Settings:
     """Simple settings loader for database connection."""
 
     def __init__(self) -> None:
         self.db_host = os.getenv("DB_HOST", "localhost")
         self.db_port = os.getenv("DB_PORT", "5432")
-        self.db_name = os.getenv("DB_NAME", "lms")
+        self.db_name = os.getenv("DB_NAME", "LMS")
         self.db_user = os.getenv("DB_USER", "postgres")
-        self.db_password = os.getenv("DB_PASSWORD", "postgres")
-
+        self.db_password = os.getenv("DB_PASSWORD", "hung")
     @property
     def sqlalchemy_database_uri(self) -> str:
         return (
@@ -27,12 +27,10 @@ class Settings:
             f"@{self.db_host}:{self.db_port}/{self.db_name}"
         )
 
-
 settings = Settings()
 
 engine = create_engine(settings.sqlalchemy_database_uri, future=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
 
 def get_db() -> Generator:
     """Provide a database session per request."""
@@ -41,7 +39,6 @@ def get_db() -> Generator:
         yield db
     finally:
         db.close()
-
 
 def _prepare_create_statements(raw_sql: str) -> List[str]:
     """Extract CREATE TABLE statements and make them idempotent."""
