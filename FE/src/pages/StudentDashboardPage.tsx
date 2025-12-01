@@ -222,10 +222,11 @@ const StudentDashboardPage: React.FC = () => {
       alignItems: "center",
     }}
   >
-    <div className="small-caption">
+    {/* <div className="small-caption">
       <span style={{ marginRight: "8px" }}>Scale 4</span>
       <span>Scale 10</span>
-    </div>
+    </div> */}
+    
     <div className="small-caption">
       Current Goal: <strong>3.6</strong>
       <button
