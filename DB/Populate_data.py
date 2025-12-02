@@ -10,7 +10,7 @@ DB_NAME = "LMS"
 DB_USER = "postgres"
 DB_PASS = "hung"
 DB_HOST = "localhost"
-DB_PORT = "5432"
+DB_PORT = "5051"
 
 MONGO_URI = "mongodb://localhost:27017/"
 MONGO_DB_NAME = "LMS_Logs"

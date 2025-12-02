@@ -1,13 +1,12 @@
 from datetime import date, datetime
 from sqlalchemy import (
-    CheckConstraint,
+    Boolean,
     Column,
     Date,
     DateTime,
     DECIMAL,
     ForeignKey,
     Integer,
-    PrimaryKeyConstraint,
     String,
     Text,
     UniqueConstraint,
@@ -18,210 +17,347 @@ Base = declarative_base()
 
 
 class User(Base):
-    __tablename__ = "User"
-    __table_args__ = {"quote": True}
+    __tablename__ = "user"
 
-    User_id = Column(Integer, primary_key=True, index=True)
-    Username = Column(String(20), unique=True, nullable=True)
-    Password_Hash = Column(Text, nullable=False)
-    Role = Column(String(20), nullable=False)
-    Email = Column(String(50), nullable=False)
+    user_id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(100), unique=True, nullable=True)
+    password_hash = Column(Text, nullable=False)
+    role = Column(String(20), nullable=False)
+    email = Column(String(100), nullable=False, unique=True)
 
     student = relationship("Student", back_populates="user", uselist=False)
     lecturer = relationship("Lecturer", back_populates="user", uselist=False)
     manager = relationship("Manager", back_populates="user", uselist=False)
     activities = relationship("ActivityLog", back_populates="user")
+    sent_messages = relationship("Message", foreign_keys="Message.sender_id", back_populates="sender")
+    received_messages = relationship("Message", foreign_keys="Message.receiver_id", back_populates="receiver")
 
 
 class Student(Base):
-    __tablename__ = "Student"
-    __table_args__ = {"quote": True}
+    __tablename__ = "student"
 
-    User_id = Column(Integer, ForeignKey('"User"."User_id"', ondelete="CASCADE"), primary_key=True)
-    Student_id = Column(Integer, unique=True, nullable=False)
-    LName = Column(String(20), nullable=False)
-    MName = Column(String(20), nullable=False)
-    FName = Column(String(20), nullable=False)
-    Major = Column(String(50), nullable=False)
-    DOB = Column(Date)
-    Current_GPA = Column(DECIMAL(2, 1), nullable=False)
-    Target_GPA = Column(DECIMAL(2, 1))
+    user_id = Column(Integer, ForeignKey("user.user_id", ondelete="CASCADE"), primary_key=True)
+    student_id = Column(Integer, unique=True, nullable=False)
+    lname = Column(String(50), nullable=False)
+    mname = Column(String(50))
+    fname = Column(String(50), nullable=False)
+    major = Column(String(100), nullable=False)
+    dob = Column(Date)
+    current_gpa = Column(DECIMAL(3, 2), nullable=False, default=0.00)
+    target_gpa = Column(DECIMAL(3, 2))
 
     user = relationship("User", back_populates="student")
     enrollments = relationship("Enroll", back_populates="student")
     submissions = relationship("Submission", back_populates="student")
     feedbacks = relationship("Feedback", back_populates="student")
     predictions = relationship("Prediction", back_populates="student")
+    grades = relationship("Grade", back_populates="student")
+    quiz_attempts = relationship("QuizAttempt", back_populates="student")
+    course_ratings = relationship("CourseRating", back_populates="student")
+    attendance_details = relationship("AttendanceDetail", back_populates="student")
 
 
 class Lecturer(Base):
-    __tablename__ = "Lecturer"
-    __table_args__ = {"quote": True}
+    __tablename__ = "lecturer"
 
-    User_id = Column(Integer, ForeignKey('"User"."User_id"', ondelete="CASCADE"), primary_key=True)
-    Title = Column(String(100))
-    LName = Column(String(20), nullable=False)
-    MName = Column(String(20), nullable=False)
-    FName = Column(String(20), nullable=False)
-    Department = Column(String(100), nullable=False)
+    user_id = Column(Integer, ForeignKey("user.user_id", ondelete="CASCADE"), primary_key=True)
+    title = Column(String(100))
+    lname = Column(String(50), nullable=False)
+    mname = Column(String(50))
+    fname = Column(String(50), nullable=False)
+    department = Column(String(100), nullable=False)
 
     user = relationship("User", back_populates="lecturer")
+    courses = relationship("Course", back_populates="lecturer")
 
 
 class Manager(Base):
-    __tablename__ = "Manager"
-    __table_args__ = {"quote": True}
+    __tablename__ = "manager"
 
-    User_id = Column(Integer, ForeignKey('"User"."User_id"', ondelete="CASCADE"), primary_key=True)
-    Name = Column(String(200), nullable=False)
-    Office = Column(String(100), nullable=False)
-    Position = Column(String(100))
+    user_id = Column(Integer, ForeignKey("user.user_id", ondelete="CASCADE"), primary_key=True)
+    name = Column(String(200), nullable=False)
+    office = Column(String(100), nullable=False)
+    position = Column(String(100))
 
     user = relationship("User", back_populates="manager")
 
 
-class Prediction(Base):
-    __tablename__ = "Prediction"
-    __table_args__ = {"quote": True}
-
-    Prediction_id = Column(Integer, primary_key=True, index=True)
-    User_id = Column(Integer, ForeignKey('"Student"."User_id"', ondelete="CASCADE"), nullable=False)
-    Predicted_GPA = Column(DECIMAL(2, 1), nullable=False)
-    Confidence_level = Column(DECIMAL(5, 2), nullable=False)
-    Model_version = Column(String(20), nullable=False)
-    Recommendations = Column(Text)
-    Target_GPA = Column(DECIMAL(2, 1))
-
-    student = relationship("Student", back_populates="predictions")
-
-
-class AttendanceRecord(Base):
-    __tablename__ = "Attendance_Record"
-    __table_args__ = {"quote": True}
-
-    Record_id = Column(Integer, primary_key=True, index=True)
-    Date = Column(Date, nullable=False)
-    Status = Column(String(20), nullable=False)
-
-    details = relationship("AttendanceDetail", back_populates="record")
-
-
 class Course(Base):
-    __tablename__ = "Course"
-    __table_args__ = (CheckConstraint("Capacity < 100", name="ck_capacity"), {"quote": True})
+    __tablename__ = "course"
 
-    Course_id = Column(Integer, primary_key=True, index=True)
-    Course_code = Column(String(100), unique=True, nullable=False)
-    Course_name = Column(String(100), nullable=False)
-    Credits = Column(Integer, nullable=False)
-    Capacity = Column(Integer, nullable=False)
-    Semester = Column(String(20), nullable=False)
+    course_id = Column(Integer, primary_key=True, index=True)
+    course_code = Column(String(100), unique=True, nullable=False)
+    course_name = Column(String(200), nullable=False)
+    credits = Column(Integer, nullable=False)
+    capacity = Column(Integer, nullable=False, default=50)
+    semester = Column(String(20), nullable=False)
+    lecturer_id = Column(Integer, ForeignKey("lecturer.user_id", ondelete="SET NULL"))
+    description = Column(Text)
 
+    lecturer = relationship("Lecturer", back_populates="courses")
     materials = relationship("Materials", back_populates="course")
     enrollments = relationship("Enroll", back_populates="course")
     feedbacks = relationship("Feedback", back_populates="course")
-    attendance_details = relationship("AttendanceDetail", back_populates="course")
+    assignments = relationship("Assignment", back_populates="course")
+    quizzes = relationship("Quiz", back_populates="course")
+    grades = relationship("Grade", back_populates="course")
+    course_ratings = relationship("CourseRating", back_populates="course")
+    attendance_records = relationship("AttendanceRecord", back_populates="course")
+
+
+class Enroll(Base):
+    __tablename__ = "enroll"
+
+    enroll_id = Column(Integer, primary_key=True, index=True)
+    course_id = Column(Integer, ForeignKey("course.course_id", ondelete="CASCADE"), nullable=False)
+    student_id = Column(Integer, ForeignKey("student.user_id", ondelete="CASCADE"), nullable=False)
+    semester = Column(String(20))
+    status = Column(String(20), nullable=False, default='active')
+    enrolled_at = Column(DateTime, default=datetime.utcnow)
+
+    course = relationship("Course", back_populates="enrollments")
+    student = relationship("Student", back_populates="enrollments")
+
+    __table_args__ = (
+        UniqueConstraint('course_id', 'student_id', name='uq_enroll'),
+    )
+
+
+class Materials(Base):
+    __tablename__ = "materials"
+
+    materials_id = Column(Integer, primary_key=True, index=True)
+    course_id = Column(Integer, ForeignKey("course.course_id", ondelete="CASCADE"), nullable=False)
+    type = Column(String(50), nullable=False)
+    description = Column(Text)
+    title = Column(String(200), nullable=False)
+    file_path = Column(String(500))
+    upload_date = Column(DateTime, default=datetime.utcnow)
+
+    course = relationship("Course", back_populates="materials")
+
+
+class Assignment(Base):
+    __tablename__ = "assignment"
+
+    assignment_id = Column(Integer, primary_key=True, index=True)
+    course_id = Column(Integer, ForeignKey("course.course_id", ondelete="CASCADE"), nullable=False)
+    title = Column(String(200), nullable=False)
+    description = Column(Text)
+    deadline = Column(DateTime, nullable=False)
+    max_score = Column(DECIMAL(5, 2), default=100.00)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    course = relationship("Course", back_populates="assignments")
+    submissions = relationship("Submission", back_populates="assignment")
+    grades = relationship("Grade", back_populates="assignment")
+
+
+class Submission(Base):
+    __tablename__ = "submission"
+
+    submission_id = Column(Integer, primary_key=True, index=True)
+    assignment_id = Column(Integer, ForeignKey("assignment.assignment_id", ondelete="CASCADE"), nullable=False)
+    student_id = Column(Integer, ForeignKey("student.user_id", ondelete="CASCADE"), nullable=False)
+    score = Column(DECIMAL(5, 2))
+    file_path = Column(String(500))
+    submitted_at = Column(DateTime, default=datetime.utcnow)
+    graded_at = Column(DateTime)
+    comments = Column(Text)
+
+    assignment = relationship("Assignment", back_populates="submissions")
+    student = relationship("Student", back_populates="submissions")
+
+    __table_args__ = (
+        UniqueConstraint('assignment_id', 'student_id', name='uq_submission'),
+    )
+
+
+class Quiz(Base):
+    __tablename__ = "quiz"
+
+    quiz_id = Column(Integer, primary_key=True, index=True)
+    course_id = Column(Integer, ForeignKey("course.course_id", ondelete="CASCADE"), nullable=False)
+    title = Column(String(200), nullable=False)
+    description = Column(Text)
+    duration_minutes = Column(Integer, default=30)
+    max_attempts = Column(Integer, default=1)
+    start_time = Column(DateTime)
+    end_time = Column(DateTime)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    course = relationship("Course", back_populates="quizzes")
+    questions = relationship("QuizQuestion", back_populates="quiz")
+    attempts = relationship("QuizAttempt", back_populates="quiz")
+    grades = relationship("Grade", back_populates="quiz")
+
+
+class QuizQuestion(Base):
+    __tablename__ = "quiz_question"
+
+    question_id = Column(Integer, primary_key=True, index=True)
+    quiz_id = Column(Integer, ForeignKey("quiz.quiz_id", ondelete="CASCADE"), nullable=False)
+    question_text = Column(Text, nullable=False)
+    option_a = Column(String(500), nullable=False)
+    option_b = Column(String(500), nullable=False)
+    option_c = Column(String(500))
+    option_d = Column(String(500))
+    correct_option = Column(String(1), nullable=False)
+    points = Column(DECIMAL(5, 2), default=1.00)
+
+    quiz = relationship("Quiz", back_populates="questions")
+    attempt_details = relationship("QuizAttemptDetail", back_populates="question")
+
+
+class QuizAttempt(Base):
+    __tablename__ = "quiz_attempt"
+
+    attempt_id = Column(Integer, primary_key=True, index=True)
+    quiz_id = Column(Integer, ForeignKey("quiz.quiz_id", ondelete="CASCADE"), nullable=False)
+    student_id = Column(Integer, ForeignKey("student.user_id", ondelete="CASCADE"), nullable=False)
+    started_at = Column(DateTime, default=datetime.utcnow)
+    finished_at = Column(DateTime)
+    total_score = Column(DECIMAL(5, 2))
+    status = Column(String(20), default='in_progress')
+
+    quiz = relationship("Quiz", back_populates="attempts")
+    student = relationship("Student", back_populates="quiz_attempts")
+    details = relationship("QuizAttemptDetail", back_populates="attempt")
+
+
+class QuizAttemptDetail(Base):
+    __tablename__ = "quiz_attempt_detail"
+
+    detail_id = Column(Integer, primary_key=True, index=True)
+    attempt_id = Column(Integer, ForeignKey("quiz_attempt.attempt_id", ondelete="CASCADE"), nullable=False)
+    question_id = Column(Integer, ForeignKey("quiz_question.question_id", ondelete="CASCADE"), nullable=False)
+    chosen_option = Column(String(1))
+    is_correct = Column(Boolean)
+
+    attempt = relationship("QuizAttempt", back_populates="details")
+    question = relationship("QuizQuestion", back_populates="attempt_details")
+
+    __table_args__ = (
+        UniqueConstraint('attempt_id', 'question_id', name='uq_attempt_question'),
+    )
+
+
+class Grade(Base):
+    __tablename__ = "grade"
+
+    grade_id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("student.user_id", ondelete="CASCADE"), nullable=False)
+    course_id = Column(Integer, ForeignKey("course.course_id", ondelete="CASCADE"), nullable=False)
+    assignment_id = Column(Integer, ForeignKey("assignment.assignment_id", ondelete="SET NULL"))
+    quiz_id = Column(Integer, ForeignKey("quiz.quiz_id", ondelete="SET NULL"))
+    score = Column(DECIMAL(5, 2), nullable=False)
+    max_score = Column(DECIMAL(5, 2), default=100.00)
+    grade_type = Column(String(20), nullable=False)
+    graded_at = Column(DateTime, default=datetime.utcnow)
+
+    student = relationship("Student", back_populates="grades")
+    course = relationship("Course", back_populates="grades")
+    assignment = relationship("Assignment", back_populates="grades")
+    quiz = relationship("Quiz", back_populates="grades")
 
 
 class Feedback(Base):
-    __tablename__ = "Feedback"
-    __table_args__ = (
-        CheckConstraint("Rating >= 1 AND Rating <= 5", name="ck_feedback_rating"),
-        {"quote": True},
-    )
+    __tablename__ = "feedback"
 
-    Feedback_id = Column(Integer, primary_key=True, index=True)
-    Content = Column(String(500))
-    Rating = Column(Integer, nullable=False, default=1)
-    Student_id = Column(Integer, ForeignKey('"Student"."User_id"', ondelete="CASCADE"), nullable=False)
-    Course_id = Column(Integer, ForeignKey('"Course"."Course_id"', ondelete="CASCADE"), nullable=False)
+    feedback_id = Column(Integer, primary_key=True, index=True)
+    content = Column(Text)
+    rating = Column(Integer, nullable=False, default=3)
+    student_id = Column(Integer, ForeignKey("student.user_id", ondelete="CASCADE"), nullable=False)
+    course_id = Column(Integer, ForeignKey("course.course_id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
     student = relationship("Student", back_populates="feedbacks")
     course = relationship("Course", back_populates="feedbacks")
 
 
+class CourseRating(Base):
+    __tablename__ = "course_rating"
+
+    rating_id = Column(Integer, primary_key=True, index=True)
+    course_id = Column(Integer, ForeignKey("course.course_id", ondelete="CASCADE"), nullable=False)
+    student_id = Column(Integer, ForeignKey("student.user_id", ondelete="CASCADE"), nullable=False)
+    rating = Column(Integer, nullable=False)
+    comment = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    course = relationship("Course", back_populates="course_ratings")
+    student = relationship("Student", back_populates="course_ratings")
+
+    __table_args__ = (
+        UniqueConstraint('course_id', 'student_id', name='uq_course_rating'),
+    )
+
+
+class Message(Base):
+    __tablename__ = "message"
+
+    message_id = Column(Integer, primary_key=True, index=True)
+    sender_id = Column(Integer, ForeignKey("user.user_id", ondelete="CASCADE"), nullable=False)
+    receiver_id = Column(Integer, ForeignKey("user.user_id", ondelete="CASCADE"), nullable=False)
+    content = Column(Text, nullable=False)
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    sender = relationship("User", foreign_keys=[sender_id], back_populates="sent_messages")
+    receiver = relationship("User", foreign_keys=[receiver_id], back_populates="received_messages")
+
+
+class AttendanceRecord(Base):
+    __tablename__ = "attendance_record"
+
+    record_id = Column(Integer, primary_key=True, index=True)
+    course_id = Column(Integer, ForeignKey("course.course_id", ondelete="CASCADE"), nullable=False)
+    date = Column(Date, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    course = relationship("Course", back_populates="attendance_records")
+    details = relationship("AttendanceDetail", back_populates="record")
+
+
 class AttendanceDetail(Base):
-    __tablename__ = "Attendance_Detail"
-    __table_args__ = (
-        PrimaryKeyConstraint("Course_id", "Record_id", "Student_id"),
-        {"quote": True},
-    )
+    __tablename__ = "attendance_detail"
 
-    Course_id = Column(Integer, ForeignKey('"Course"."Course_id"', ondelete="CASCADE", onupdate="CASCADE"))
-    Record_id = Column(Integer, ForeignKey('"Attendance_Record"."Record_id"', ondelete="CASCADE", onupdate="CASCADE"))
-    Student_id = Column(Integer, ForeignKey('"Student"."User_id"', ondelete="CASCADE", onupdate="CASCADE"))
+    detail_id = Column(Integer, primary_key=True, index=True)
+    record_id = Column(Integer, ForeignKey("attendance_record.record_id", ondelete="CASCADE"), nullable=False)
+    student_id = Column(Integer, ForeignKey("student.user_id", ondelete="CASCADE"), nullable=False)
+    status = Column(String(20), nullable=False, default='present')
 
-    course = relationship("Course", back_populates="attendance_details")
     record = relationship("AttendanceRecord", back_populates="details")
-    student = relationship("Student")
+    student = relationship("Student", back_populates="attendance_details")
 
-
-class Materials(Base):
-    __tablename__ = "Materials"
-    __table_args__ = {"quote": True}
-
-    Materials_id = Column(Integer, primary_key=True, index=True)
-    Course_id = Column(Integer, ForeignKey('"Course"."Course_id"', ondelete="CASCADE", onupdate="CASCADE"), nullable=False)
-    Type = Column(String(50), nullable=False)
-    Description = Column(String(200))
-    Title = Column(String(100), unique=True)
-    File_path = Column(String(200), unique=True)
-    Upload_date = Column(Date, nullable=False)
-
-    course = relationship("Course", back_populates="materials")
-
-
-class Enroll(Base):
-    __tablename__ = "Enroll"
     __table_args__ = (
-        PrimaryKeyConstraint("Course_id", "Student_id"),
-        {"quote": True},
+        UniqueConstraint('record_id', 'student_id', name='uq_attendance_detail'),
     )
 
-    Course_id = Column(Integer, ForeignKey('"Course"."Course_id"', ondelete="CASCADE", onupdate="CASCADE"))
-    Student_id = Column(Integer, ForeignKey('"Student"."User_id"', ondelete="CASCADE", onupdate="CASCADE"))
 
-    course = relationship("Course", back_populates="enrollments")
-    student = relationship("Student", back_populates="enrollments")
+class Prediction(Base):
+    __tablename__ = "prediction"
 
+    prediction_id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("student.user_id", ondelete="CASCADE"), nullable=False)
+    predicted_gpa = Column(DECIMAL(3, 2), nullable=False)
+    confidence_level = Column(DECIMAL(5, 2), nullable=False)
+    model_version = Column(String(20), nullable=False)
+    recommendations = Column(Text)
+    target_gpa = Column(DECIMAL(3, 2))
+    created_at = Column(DateTime, default=datetime.utcnow)
 
-class Assignment(Base):
-    __tablename__ = "Assignment"
-    __table_args__ = {"quote": True}
-
-    Assignment_id = Column(Integer, primary_key=True, index=True)
-    Description = Column(String(200))
-    Deadlines = Column(Date, nullable=False)
-
-    submissions = relationship("Submission", back_populates="assignment")
-
-
-class Submission(Base):
-    __tablename__ = "Submission"
-    __table_args__ = (
-        UniqueConstraint("Assignment_id", "Student_id", name="uq_submission"),
-        {"quote": True},
-    )
-
-    Submission_id = Column(Integer, primary_key=True, index=True)
-    Assignment_id = Column(Integer, ForeignKey('"Assignment"."Assignment_id"', ondelete="CASCADE", onupdate="CASCADE"), nullable=False)
-    Student_id = Column(Integer, ForeignKey('"Student"."User_id"', ondelete="CASCADE", onupdate="CASCADE"), nullable=False)
-    Score = Column(DECIMAL(5, 2))
-    File_path = Column(String(200), unique=True)
-
-    assignment = relationship("Assignment", back_populates="submissions")
-    student = relationship("Student", back_populates="submissions")
+    student = relationship("Student", back_populates="predictions")
 
 
 class ActivityLog(Base):
-    __tablename__ = "Activity_Log"
-    __table_args__ = {"quote": True}
+    __tablename__ = "activity_log"
 
-    Log_id = Column(Integer, primary_key=True, index=True)
-    Detail = Column(String(100))
-    Action = Column(String(50), nullable=False)
-    Timestamp = Column(DateTime, default=datetime.utcnow)
-    IP_Address = Column(String(45), nullable=False)
-    User_id = Column(Integer, ForeignKey('"User"."User_id"', ondelete="CASCADE"), nullable=False)
+    log_id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("user.user_id", ondelete="CASCADE"), nullable=False)
+    action = Column(String(100), nullable=False)
+    detail = Column(Text)
+    ip_address = Column(String(45))
+    timestamp = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="activities")

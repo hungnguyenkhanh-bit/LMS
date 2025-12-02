@@ -57,6 +57,48 @@ def _prepare_create_statements(raw_sql: str) -> List[str]:
     return statements
 
 
+def sync_sequences() -> None:
+    """
+    Synchronize all sequences to ensure they are greater than the max ID in each table.
+    This prevents duplicate key errors when inserting new records.
+    """
+    # Mapping of sequence_name -> (table_name, id_column)
+    sequence_mappings = [
+        ("message_message_id_seq", "message", "message_id"),
+        ("feedback_feedback_id_seq", "feedback", "feedback_id"),
+        ("quiz_attempt_attempt_id_seq", "quiz_attempt", "attempt_id"),
+        ("quiz_attempt_detail_detail_id_seq", "quiz_attempt_detail", "detail_id"),
+        ("submission_submission_id_seq", "submission", "submission_id"),
+        ("grade_grade_id_seq", "grade", "grade_id"),
+        ("course_rating_rating_id_seq", "course_rating", "rating_id"),
+        ("enroll_enroll_id_seq", "enroll", "enroll_id"),
+        ("user_user_id_seq", "user", "user_id"),
+        ("course_course_id_seq", "course", "course_id"),
+        ("quiz_quiz_id_seq", "quiz", "quiz_id"),
+        ("quiz_question_question_id_seq", "quiz_question", "question_id"),
+        ("assignment_assignment_id_seq", "assignment", "assignment_id"),
+        ("materials_materials_id_seq", "materials", "materials_id"),
+        ("activity_log_log_id_seq", "activity_log", "log_id"),
+    ]
+    
+    with engine.begin() as connection:
+        for seq_name, table_name, id_col in sequence_mappings:
+            try:
+                # Get the max id from the table
+                result = connection.execute(
+                    text(f"SELECT COALESCE(MAX({id_col}), 0) FROM {table_name}")
+                )
+                max_id = result.scalar() or 0
+                
+                # Set the sequence to max_id + 1
+                connection.execute(
+                    text(f"SELECT setval('{seq_name}', {max_id + 1}, false)")
+                )
+            except Exception as e:
+                # Skip if sequence or table doesn't exist
+                pass
+
+
 def run_schema_sql() -> None:
     """
     Parse and execute CREATE TABLE statements from DB/LMS.sql.
@@ -81,3 +123,6 @@ def run_schema_sql() -> None:
         for stmt in statements:
             connection.execute(text(stmt))
     print(f"[database] Applied schema from {schema_path}")
+    
+    # Sync sequences to prevent duplicate key errors
+    sync_sequences()

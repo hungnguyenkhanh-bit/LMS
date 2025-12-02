@@ -1,6 +1,28 @@
-import { Outlet, Link, NavLink } from "react-router-dom";
+import { Outlet, NavLink, useNavigate } from "react-router-dom";
+import { useAuth, getNavLinks } from "../contexts/AuthContext";
 
 export default function AppLayout() {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
+
+  // Get navigation links based on user role
+  const navLinks = user ? getNavLinks(user.role) : [];
+
+  // Get user initials for avatar
+  const getInitials = (name: string) => {
+    if (!name) return "U";
+    const parts = name.split(" ");
+    if (parts.length >= 2) {
+      return parts[0][0] + parts[parts.length - 1][0];
+    }
+    return name[0];
+  };
+
   return (
     <div className="app-shell">
       {/* Header */}
@@ -14,17 +36,24 @@ export default function AppLayout() {
 
         {/* Nav */}
         <nav className="app-nav">
-          <NavLink to="/" end>
-            Dashboard
-          </NavLink>
-          <NavLink to="/courses">My Courses</NavLink>
-          <NavLink to="/feedback">Write Feedback</NavLink>
+          {navLinks.map((link) => (
+            <NavLink key={link.path} to={link.path}>
+              {link.label}
+            </NavLink>
+          ))}
         </nav>
 
         {/* User area */}
         <div className="app-user-area">
-          <button className="btn btn-secondary">Logout</button>
-          <div className="avatar-circle">A</div>
+          <span style={{ marginRight: "12px", fontSize: "14px" }}>
+            {user?.full_name}
+          </span>
+          <button className="btn btn-secondary" onClick={handleLogout}>
+            Logout
+          </button>
+          <div className="avatar-circle" title={user?.full_name || "User"}>
+            {getInitials(user?.full_name || "U")}
+          </div>
         </div>
       </header>
 

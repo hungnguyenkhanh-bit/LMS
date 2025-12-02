@@ -1,22 +1,44 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth, getDashboardRoute } from "../contexts/AuthContext";
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
+  const { login, isLoading, error } = useAuth();
 
   // State điều khiển form
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [loginError, setLoginError] = useState<string | null>(null);
 
-  // Fake login function
-  const handleLogin = () => {
+  // Real login function connected to backend
+  const handleLogin = async () => {
     if (username.trim() === "" || password.trim() === "") {
-      alert("Please enter username and password!");
+      setLoginError("Please enter username and password!");
       return;
     }
 
-    // Tạm thời login fake → navigate tới dashboard
-    navigate("/student-dashboard");
+    setLoginError(null);
+
+    try {
+      await login(username, password);
+      // Get the user from localStorage after login
+      const storedUser = localStorage.getItem("user");
+      if (storedUser) {
+        const user = JSON.parse(storedUser);
+        const dashboardRoute = getDashboardRoute(user.role);
+        navigate(dashboardRoute);
+      }
+    } catch (err) {
+      setLoginError(err instanceof Error ? err.message : "Login failed. Please try again.");
+    }
+  };
+
+  // Handle Enter key press
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleLogin();
+    }
   };
 
   return (
@@ -61,6 +83,7 @@ const LoginPage: React.FC = () => {
                 placeholder="Enter your password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={handleKeyPress}
               />
             </div>
 
@@ -69,8 +92,19 @@ const LoginPage: React.FC = () => {
               <span>Warn me before logging me into other sites.</span>
             </label>
 
-            <button className="btn-login" onClick={handleLogin}>
-              Login
+            {/* Error message display */}
+            {(loginError || error) && (
+              <div style={{ color: "#dc2626", marginBottom: "12px", fontSize: "14px" }}>
+                {loginError || error}
+              </div>
+            )}
+
+            <button 
+              className="btn-login" 
+              onClick={handleLogin}
+              disabled={isLoading}
+            >
+              {isLoading ? "Logging in..." : "Login"}
             </button>
 
             <div className="auth-forgot">
