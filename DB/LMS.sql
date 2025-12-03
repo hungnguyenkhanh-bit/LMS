@@ -4,27 +4,27 @@
 
 -- Drop existing tables if they exist
 DROP TABLE IF EXISTS
-    quiz_attempt_detail,
-    quiz_attempt,
-    quiz_question,
-    quiz,
-    course_rating,
-    message,
-    grade,
-    attendance_detail,
-    feedback,
-    materials,
-    enroll,
-    attendance_record,
-    prediction,
-    submission,
+    activity_log,
     assignment,
-    student,
+    attendance_detail,
+    attendance_record,
+    course,
+    course_rating,
+    enroll,
+    feedback,
+    grade,
     lecturer,
     manager,
-    course,
-    "user",
-    activity_log
+    materials,
+    message,
+    prediction,
+    quiz,
+    quiz_attempt,
+    quiz_attempt_detail,
+    quiz_question,
+    student,
+    submission,
+    "user"
 CASCADE;
 
 -- =====================================================
@@ -277,3 +277,5 @@ CREATE INDEX idx_quiz_course ON quiz(course_id);
 CREATE INDEX idx_grade_student ON grade(student_id);
 CREATE INDEX idx_message_sender ON message(sender_id);
 CREATE INDEX idx_message_receiver ON message(receiver_id);
+
+SELECT * FROM "user";

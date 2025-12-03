@@ -10,6 +10,12 @@ import os
 from datetime import datetime, timedelta, date
 from decimal import Decimal
 import random
+from faker import Faker
+from pathlib import Path
+import csv
+import calendar
+
+faker = Faker("vi_VN")  # Vietnamese name for random user generation
 
 # Add BE/app to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'BE', 'app'))
@@ -100,6 +106,14 @@ QUIZ_QUESTIONS_TEMPLATES = [
     },
 ]
 
+# Total users by roles
+NUM_STUDENTS_TOTAL = 10
+NUM_LECTURERS_TOTAL = 5
+NUM_MANAGERS_TOTAL = 1
+
+FIXED_STUDENTS = STUDENT_DATA[:2]
+FIXED_LECTURERS = LECTURER_DATA[:2]
+FIXED_MANAGERS = MANAGER_DATA
 
 def clear_data(session):
     """Clear existing data in reverse dependency order"""
@@ -128,9 +142,22 @@ def clear_data(session):
     session.commit()
     print("Data cleared successfully!")
 
+def create_student_id() -> int:
+    enroll_year = faker.random_element(elements=(2020, 2021, 2022, 2023, 2024, 2025))
+    id_prefix = f"{enroll_year % 100}5"          # ví dụ: 205, 215, 225, ...
+    id_suffix = faker.numerify(text="####")      # ví dụ: 1234
+    student_id_str = f"{id_prefix}{id_suffix}"   # ví dụ: "2051234"
+    return int(student_id_str)
+
+def generate_unique_student_id(used_ids: set[int]) -> int:
+    while True:
+        sid = create_student_id()
+        if sid not in used_ids:
+            used_ids.add(sid)
+            return sid
 
 def generate_users(session):
-    """Generate users, students, lecturers, and manager"""
+    """Generate users, students, lecturers, and manager (fixed + random mix)"""
     print("Generating users...")
     
     student_user_ids = []
@@ -138,18 +165,21 @@ def generate_users(session):
     manager_user_id = None
     
     user_id_counter = 1
+    used_student_ids: set[int] = set()
     
-    # Create students
-    for i, data in enumerate(STUDENT_DATA):
-        student_id = 20210001 + i
+    # ========= 1) 2 STUDENT CỐ ĐỊNH =========
+    for i, data in enumerate(FIXED_STUDENTS):
+        # MSSV unique, giống Populate_data.py
+        student_id = generate_unique_student_id(used_student_ids)
         email = f"{data['fname'].lower()}.{data['lname'].lower()}{student_id}@student.university.edu"
         
+        # username: student1, student2
         user = User(
             user_id=user_id_counter,
             username=f"student{i+1}",
             password_hash=DEFAULT_PASSWORD,
             role="student",
-            email=email
+            email=email,
         )
         session.add(user)
         session.flush()
@@ -163,14 +193,66 @@ def generate_users(session):
             major=data["major"],
             dob=data["dob"],
             current_gpa=Decimal(str(data["gpa"])),
-            target_gpa=Decimal("3.50")
+            target_gpa=Decimal("3.50"),
         )
         session.add(student)
         student_user_ids.append(user_id_counter)
+        
         user_id_counter += 1
     
-    # Create lecturers
-    for i, data in enumerate(LECTURER_DATA):
+    # ========= 2) STUDENT RANDOM BẰNG FAKER =========
+    num_random_students = max(0, NUM_STUDENTS_TOTAL - len(FIXED_STUDENTS))
+    majors = [
+        "Computer Science",
+        "Information Technology",
+        "Software Engineering",
+        "Data Science",
+        "Artificial Intelligence",
+    ]
+    
+    for j in range(num_random_students):
+        idx = len(FIXED_STUDENTS) + j + 1  # student3, student4, ...
+        
+        gender = random.choice(["male", "female"])
+        lname = faker.last_name()
+        mname = faker.middle_name()
+        fname = faker.first_name_male() if gender == "male" else faker.first_name_female()
+        major = random.choice(majors)
+        dob = faker.date_of_birth(minimum_age=18, maximum_age=22)
+        gpa = round(random.uniform(2.0, 4.0), 2)
+        
+        # MSSV unique
+        student_id = generate_unique_student_id(used_student_ids)
+        email = f"{fname.lower()}.{lname.lower()}{student_id}@student.university.edu"
+        
+        user = User(
+            user_id=user_id_counter,
+            username=f"student{idx}",       # student3..student10
+            password_hash=DEFAULT_PASSWORD,
+            role="student",
+            email=email,
+        )
+        session.add(user)
+        session.flush()
+        
+        student = Student(
+            user_id=user_id_counter,
+            student_id=student_id,
+            lname=lname,
+            mname=mname,
+            fname=fname,
+            major=major,
+            dob=dob,
+            current_gpa=Decimal(str(gpa)),
+            target_gpa=Decimal("3.50"),
+        )
+        session.add(student)
+        student_user_ids.append(user_id_counter)
+        
+        user_id_counter += 1
+    
+    # ========= 3) 2 LECTURER CỐ ĐỊNH =========
+    for i, data in enumerate(FIXED_LECTURERS):
         email = f"{data['fname'].lower()}.{data['lname'].lower()}@university.edu"
         
         user = User(
@@ -178,7 +260,7 @@ def generate_users(session):
             username=f"lecturer{i+1}",
             password_hash=DEFAULT_PASSWORD,
             role="lecturer",
-            email=email
+            email=email,
         )
         session.add(user)
         session.flush()
@@ -189,19 +271,64 @@ def generate_users(session):
             lname=data["lname"],
             mname=data["mname"],
             fname=data["fname"],
-            department=data["department"]
+            department=data["department"],
         )
         session.add(lecturer)
         lecturer_user_ids.append(user_id_counter)
         user_id_counter += 1
     
-    # Create manager
+    # ========= 4) LECTURER RANDOM =========
+    num_random_lecturers = max(0, NUM_LECTURERS_TOTAL - len(FIXED_LECTURERS))
+    departments = [
+        "Computer Science",
+        "Information Technology",
+        "Software Engineering",
+        "Data Science",
+        "Artificial Intelligence",
+    ]
+    titles = ["Dr.", "Prof.", "Assoc. Prof."]
+
+    for j in range(num_random_lecturers):
+        idx = len(FIXED_LECTURERS) + j + 1  # lecturer3, lecturer4, ...
+        
+        gender = random.choice(["male", "female"])
+        lname = faker.last_name()
+        mname = faker.middle_name()
+        fname = faker.first_name_male() if gender == "male" else faker.first_name_female()
+        dept = random.choice(departments)
+        title = random.choice(titles)
+        
+        email = f"{fname.lower()}.{lname.lower()}@university.edu"
+        
+        user = User(
+            user_id=user_id_counter,
+            username=f"lecturer{idx}",
+            password_hash=DEFAULT_PASSWORD,
+            role="lecturer",
+            email=email,
+        )
+        session.add(user)
+        session.flush()
+        
+        lecturer = Lecturer(
+            user_id=user_id_counter,
+            title=title,
+            lname=lname,
+            mname=mname,
+            fname=fname,
+            department=dept,
+        )
+        session.add(lecturer)
+        lecturer_user_ids.append(user_id_counter)
+        user_id_counter += 1
+    
+    # ========= 5) MANAGER CỐ ĐỊNH =========
     user = User(
         user_id=user_id_counter,
         username="manager1",
         password_hash=DEFAULT_PASSWORD,
         role="manager",
-        email="admin.manager@university.edu"
+        email="admin.manager@university.edu",
     )
     session.add(user)
     session.flush()
@@ -210,26 +337,89 @@ def generate_users(session):
         user_id=user_id_counter,
         name=MANAGER_DATA["name"],
         office=MANAGER_DATA["office"],
-        position=MANAGER_DATA["position"]
+        position=MANAGER_DATA["position"],
     )
     session.add(manager)
     manager_user_id = user_id_counter
     
     session.commit()
-    print(f"Created {len(student_user_ids)} students, {len(lecturer_user_ids)} lecturers, 1 manager")
+    print(
+        f"Created {len(student_user_ids)} students, "
+        f"{len(lecturer_user_ids)} lecturers, 1 manager"
+    )
     
     return student_user_ids, lecturer_user_ids, manager_user_id
 
+# Thư mục chứa file sample_data.py (tức là thư mục DB/)
+BASE_DIR = Path(__file__).resolve().parent
+
+def load_course_data_from_csv(path: Path | None = None):
+    """
+    Đọc file mon_all.csv (được scrape từ web) và trả về list dict
+    có dạng giống COURSE_DATA: [{code, name, credits, capacity, semester}, ...]
+    """
+    if path is None:
+        path = BASE_DIR / "mon_all.csv"
+
+    if not path.exists():
+        print(f"[load_course_data_from_csv] File '{path}' không tồn tại.")
+        return []
+
+    courses = []
+    with path.open(mode="r", encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            try:
+                # Các cột theo file scrape: "Mã MH", "Tên MH", "Tín chỉ"
+                raw_code = row.get("Mã MH", "").strip()
+                raw_name = row.get("Tên MH", "").strip()
+                raw_credits = row.get("Tín chỉ", "").strip()
+
+                if not raw_code or not raw_name:
+                    continue
+
+                # Lấy số tín chỉ: có thể là "3" hoặc "3(3,0,0)" nên tách phần số đầu tiên
+                digits = "".join(ch for ch in raw_credits if ch.isdigit())
+                credits = int(digits) if digits else 3
+            except Exception as e:
+                print(f"  -> Bỏ qua 1 dòng do lỗi: {e} | row = {row}")
+                continue
+
+            # Gán capacity + semester "giả" vì CSV không có hai cột này
+            capacity = random.choice([30, 40, 50, 60, 70, 80])
+            semester = random.choice(["2024-1", "2024-2", "2025-1"])
+
+            courses.append(
+                {
+                    "code": raw_code,
+                    "name": raw_name,
+                    "credits": credits,
+                    "capacity": capacity,
+                    "semester": semester,
+                }
+            )
+
+    print(f"[load_course_data_from_csv] Đã load {len(courses)} môn từ '{path}'.")
+    return courses
+
 
 def generate_courses(session, lecturer_user_ids):
-    """Generate courses and assign to lecturers"""
+    """Generate courses from mon_all.csv and assign to lecturers"""
     print("Generating courses...")
-    
+
+    # 1. Load dữ liệu course từ CSV
+    course_data = load_course_data_from_csv()
+
+    # 2. Nếu CSV rỗng / lỗi -> fallback về COURSE_DATA (để script vẫn chạy)
+    if not course_data:
+        print("Không load được course từ CSV, dùng COURSE_DATA mặc định.")
+        course_data = COURSE_DATA
+
     course_ids = []
-    for i, data in enumerate(COURSE_DATA):
+    for i, data in enumerate(course_data):
         # Assign lecturers in round-robin
         lecturer_id = lecturer_user_ids[i % len(lecturer_user_ids)]
-        
+
         course = Course(
             course_id=i + 1,
             course_code=data["code"],
@@ -238,41 +428,96 @@ def generate_courses(session, lecturer_user_ids):
             capacity=data["capacity"],
             semester=data["semester"],
             lecturer_id=lecturer_id,
-            description=f"This course covers {data['name'].lower()} concepts and practical applications."
+            description=f"This course covers {data['name'].lower()} concepts and practical applications.",
         )
         session.add(course)
         course_ids.append(i + 1)
-    
+
     session.commit()
     print(f"Created {len(course_ids)} courses")
     return course_ids
 
+def enrolled_at_from_semester(semester_str: str) -> datetime:
+    """
+    Tính thời điểm enrolled_at dựa trên mã học kỳ của course.
+    semester_str dạng 'YYYY-1/2/3':
+      - 'YYYY-1' -> tháng 9 của YYYY
+      - 'YYYY-2' -> tháng 1 của YYYY+1
+      - 'YYYY-3' -> tháng 6 của YYYY+1
+    """
+    try:
+        year_str, term_str = semester_str.split("-")
+        academic_year = int(year_str)
+        term = int(term_str)
+    except Exception:
+        # fallback an toàn nếu format lạ
+        academic_year = 2024
+        term = 1
+
+    if term == 1:
+        year_full = academic_year
+        month = 9
+    elif term == 2:
+        year_full = academic_year + 1
+        month = 1
+    else:  # term == 3
+        year_full = academic_year + 1
+        month = 6
+
+    last_day = calendar.monthrange(year_full, month)[1]
+    day = random.randint(1, last_day)
+
+    return datetime(
+        year_full,
+        month,
+        day,
+        random.randint(7, 18),
+        random.randint(0, 59),
+    )
 
 def generate_enrollments(session, student_user_ids, course_ids):
-    """Generate enrollments - each student enrolls in 3-5 courses"""
+    """Generate enrollments - each student enrolls in 4-6 courses"""
     print("Generating enrollments...")
-    
+
+    if not course_ids:
+        print("Không có course_ids nào, bỏ qua generate_enrollments.")
+        return []
+
     enroll_id = 1
     enrollments = []
-    
+
+    # Map course_id -> semester của course (đã lưu trong DB)
+    courses = (
+        session.query(Course)
+        .filter(Course.course_id.in_(course_ids))
+        .all()
+    )
+    course_semesters = {c.course_id: c.semester for c in courses}
+
     for student_id in student_user_ids:
-        # Each student enrolls in 3-5 random courses
-        num_courses = random.randint(3, 5)
+        # Mỗi sinh viên học 4-6 môn
+        num_courses = random.randint(4, 6)
+        num_courses = min(num_courses, len(course_ids))  # tránh sample > số course
+
         selected_courses = random.sample(course_ids, num_courses)
-        
+
         for course_id in selected_courses:
+            # Lấy đúng semester mà course đó mở
+            semester_str = course_semesters.get(course_id, "2024-1")
+            enrolled_at = enrolled_at_from_semester(semester_str)
+
             enroll = Enroll(
-                enroll_id=enroll_id,
-                course_id=course_id,
+                enroll_id=enroll_id,   # nếu model là Enroll_id thì chỉnh lại tên field
+                course_id=course_id,   # tương tự: Course_id, Student_id nếu model dùng camel case
                 student_id=student_id,
-                semester="2024-1",
+                semester=semester_str,
                 status=random.choice(["active", "active", "active", "completed"]),
-                enrolled_at=datetime.now() - timedelta(days=random.randint(30, 120))
+                enrolled_at=enrolled_at,
             )
             session.add(enroll)
             enrollments.append((student_id, course_id))
             enroll_id += 1
-    
+
     session.commit()
     print(f"Created {enroll_id - 1} enrollments")
     return enrollments
@@ -537,9 +782,8 @@ def generate_messages(session, student_user_ids, lecturer_user_ids, manager_user
 
 
 def generate_feedback(session, enrollments):
-    """Generate 50 feedback entries"""
     print("Generating feedback...")
-    
+
     feedback_templates = [
         "Excellent course! The professor explains concepts very clearly.",
         "Good course content but could use more practical examples.",
@@ -550,37 +794,33 @@ def generate_feedback(session, enrollments):
         "Very informative lectures with good supporting materials.",
         "Could benefit from more group projects.",
     ]
-    
-    feedback_id = 1
-    used_combinations = set()
-    
-    while feedback_id <= 50:
-        student_id, course_id = random.choice(enrollments)
-        
-        # Ensure unique student-course combination
-        if (student_id, course_id) in used_combinations:
-            continue
-        used_combinations.add((student_id, course_id))
-        
+
+    # Lấy các cặp (student_id, course_id) unique
+    unique_enrollments = list(set(enrollments))
+    random.shuffle(unique_enrollments)
+
+    # Số feedback tối đa có thể tạo
+    max_feedback = min(50, len(unique_enrollments))
+
+    for feedback_id in range(1, max_feedback + 1):
+        student_id, course_id = unique_enrollments[feedback_id - 1]
+
         feedback = Feedback(
             feedback_id=feedback_id,
             content=random.choice(feedback_templates),
             rating=random.randint(3, 5),
             student_id=student_id,
             course_id=course_id,
-            created_at=datetime.now() - timedelta(days=random.randint(1, 60))
+            created_at=datetime.now() - timedelta(days=random.randint(1, 60)),
         )
         session.add(feedback)
-        feedback_id += 1
-    
-    session.commit()
-    print("Created 50 feedback entries")
 
+    session.commit()
+    print(f"Created {max_feedback} feedback entries")
 
 def generate_course_ratings(session, enrollments):
-    """Generate 20 course ratings"""
     print("Generating course ratings...")
-    
+
     rating_comments = [
         "Loved this course!",
         "Very helpful for my career.",
@@ -588,31 +828,27 @@ def generate_course_ratings(session, enrollments):
         "Well-structured curriculum.",
         "Challenging but rewarding.",
     ]
-    
-    rating_id = 1
-    used_combinations = set()
-    
-    while rating_id <= 20:
-        student_id, course_id = random.choice(enrollments)
-        
-        if (student_id, course_id) in used_combinations:
-            continue
-        used_combinations.add((student_id, course_id))
-        
+
+    unique_enrollments = list(set(enrollments))
+    random.shuffle(unique_enrollments)
+
+    max_ratings = min(20, len(unique_enrollments))
+
+    for rating_id in range(1, max_ratings + 1):
+        student_id, course_id = unique_enrollments[rating_id - 1]
+
         rating = CourseRating(
             rating_id=rating_id,
-            course_id=course_id,
             student_id=student_id,
+            course_id=course_id,
             rating=random.randint(3, 5),
             comment=random.choice(rating_comments) if random.random() > 0.3 else None,
-            created_at=datetime.now() - timedelta(days=random.randint(1, 60))
+            created_at=datetime.now() - timedelta(days=random.randint(1, 60)),
         )
         session.add(rating)
-        rating_id += 1
-    
-    session.commit()
-    print("Created 20 course ratings")
 
+    session.commit()
+    print(f"Created {max_ratings} course ratings")
 
 def generate_materials(session, course_ids):
     """Generate course materials"""
