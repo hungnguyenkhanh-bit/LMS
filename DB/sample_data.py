@@ -20,6 +20,7 @@ faker = Faker("vi_VN")  # Vietnamese name for random user generation
 # Add BE/app to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'BE', 'app'))
 
+from requests import session
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -475,8 +476,11 @@ def enrolled_at_from_semester(semester_str: str) -> datetime:
         random.randint(0, 59),
     )
 
-def generate_enrollments(session, student_user_ids, course_ids):
-    """Generate enrollments - each student enrolls in 4-6 courses"""
+def generate_enrollments(session, student_user_ids, course_ids, fixed_ids=None):
+    """Generate enrollments:
+       - student1 & student2 có kịch bản riêng
+       - các student khác random 4-6 môn
+    """
     print("Generating enrollments...")
 
     if not course_ids:
@@ -484,34 +488,126 @@ def generate_enrollments(session, student_user_ids, course_ids):
         return []
 
     enroll_id = 1
-    enrollments = []
+    enrollments: list[tuple[int, int]] = []
 
-    # Map course_id -> semester của course (đã lưu trong DB)
-    courses = (
-        session.query(Course)
-        .filter(Course.course_id.in_(course_ids))
-        .all()
-    )
-    course_semesters = {c.course_id: c.semester for c in courses}
+    # Lấy info course từ DB để biết semester + lecturer_id
+    courses = session.query(Course).filter(Course.course_id.in_(course_ids)).all()
+    course_by_id = {c.course_id: c for c in courses}
 
-    for student_id in student_user_ids:
-        # Mỗi sinh viên học 4-6 môn
+    # Nếu không truyền fixed_ids thì fallback random toàn bộ như cũ
+    if fixed_ids is None:
+        for student_id in student_user_ids:
+            num_courses = random.randint(4, 6)
+            num_courses = min(num_courses, len(course_ids))
+            selected_courses = random.sample(course_ids, num_courses)
+
+            for course_id in selected_courses:
+                semester_str = course_by_id[course_id].semester
+                enrolled_at = enrolled_at_from_semester(semester_str)
+
+                enroll = Enroll(
+                    enroll_id=enroll_id,
+                    course_id=course_id,
+                    student_id=student_id,
+                    semester=semester_str,
+                    status=random.choice(["active", "active", "active", "completed"]),
+                    enrolled_at=enrolled_at,
+                )
+                session.add(enroll)
+                enrollments.append((student_id, course_id))
+                enroll_id += 1
+
+        session.commit()
+        print(f"Created {enroll_id - 1} enrollments")
+        return enrollments
+
+    # === Kịch bản cho user cố định ===
+    student1_id = fixed_ids["student1"]
+    student2_id = fixed_ids["student2"]
+    lecturer1_id = fixed_ids["lecturer1"]
+    lecturer2_id = fixed_ids["lecturer2"]
+
+    # Các course do lecturer1 & lecturer2 dạy
+    courses_l1 = [c.course_id for c in courses if c.lecturer_id == lecturer1_id]
+    courses_l2 = [c.course_id for c in courses if c.lecturer_id == lecturer2_id]
+
+    other_courses = [
+        c_id for c_id in course_ids if c_id not in set(courses_l1 + courses_l2)
+    ]
+
+    # Helper chọn môn cho 1 student
+    def choose_courses(core_list, backup_list, min_n=4, max_n=6):
+        chosen = []
+
+        # Lấy ưu tiên từ core_list
+        random.shuffle(core_list)
+        for c_id in core_list:
+            if len(chosen) >= max_n:
+                break
+            chosen.append(c_id)
+
+        # Nếu còn thiếu so với min_n thì bổ sung từ backup
+        remaining = min_n - len(chosen)
+        if remaining > 0:
+            backup_candidates = [c for c in backup_list if c not in chosen]
+            extra = random.sample(
+                backup_candidates, k=min(remaining, len(backup_candidates))
+            )
+            chosen.extend(extra)
+
+        return chosen
+
+    # --- student1: ưu tiên học các môn của lecturer1 ---
+    s1_courses = choose_courses(courses_l1, other_courses, min_n=4, max_n=6)
+    for course_id in s1_courses:
+        semester_str = course_by_id[course_id].semester
+        enrolled_at = enrolled_at_from_semester(semester_str)
+        enroll = Enroll(
+            enroll_id=enroll_id,
+            course_id=course_id,
+            student_id=student1_id,
+            semester=semester_str,
+            status="active",
+            enrolled_at=enrolled_at,
+        )
+        session.add(enroll)
+        enrollments.append((student1_id, course_id))
+        enroll_id += 1
+
+    # --- student2: ưu tiên học các môn của lecturer2 ---
+    s2_courses = choose_courses(courses_l2, other_courses, min_n=4, max_n=6)
+    for course_id in s2_courses:
+        semester_str = course_by_id[course_id].semester
+        enrolled_at = enrolled_at_from_semester(semester_str)
+        enroll = Enroll(
+            enroll_id=enroll_id,
+            course_id=course_id,
+            student_id=student2_id,
+            semester=semester_str,
+            status=random.choice(["active", "completed"]),
+            enrolled_at=enrolled_at,
+        )
+        session.add(enroll)
+        enrollments.append((student2_id, course_id))
+        enroll_id += 1
+
+    # --- Các student còn lại: random như cũ ---
+    other_students = [sid for sid in student_user_ids if sid not in (student1_id, student2_id)]
+
+    for student_id in other_students:
         num_courses = random.randint(4, 6)
-        num_courses = min(num_courses, len(course_ids))  # tránh sample > số course
-
+        num_courses = min(num_courses, len(course_ids))
         selected_courses = random.sample(course_ids, num_courses)
 
         for course_id in selected_courses:
-            # Lấy đúng semester mà course đó mở
-            semester_str = course_semesters.get(course_id, "2024-1")
+            semester_str = course_by_id[course_id].semester
             enrolled_at = enrolled_at_from_semester(semester_str)
-
             enroll = Enroll(
-                enroll_id=enroll_id,   # nếu model là Enroll_id thì chỉnh lại tên field
-                course_id=course_id,   # tương tự: Course_id, Student_id nếu model dùng camel case
+                enroll_id=enroll_id,
+                course_id=course_id,
                 student_id=student_id,
                 semester=semester_str,
-                status=random.choice(["active", "active", "active", "completed"]),
+                status=random.choice(["active", "active", "completed"]),
                 enrolled_at=enrolled_at,
             )
             session.add(enroll)
@@ -519,9 +615,8 @@ def generate_enrollments(session, student_user_ids, course_ids):
             enroll_id += 1
 
     session.commit()
-    print(f"Created {enroll_id - 1} enrollments")
+    print(f"Created {enroll_id - 1} enrollments (with fixed-user scenario)")
     return enrollments
-
 
 def generate_assignments(session, course_ids):
     """Generate 20 assignments across courses"""
@@ -566,53 +661,202 @@ def generate_assignments(session, course_ids):
     return assignment_data
 
 
-def generate_submissions(session, assignment_data, enrollments):
-    """Generate 30 submissions"""
+def generate_submissions(session, assignment_data, enrollments, fixed_ids=None, max_submissions=60):
+    """Generate submissions.
+       - student1: luôn nộp, điểm cao, đúng/sớm hạn
+       - student2: nộp phần lớn, điểm trung bình-khá, đôi khi trễ hoặc không nộp
+       - các student khác: random như cũ
+    """
     print("Generating submissions...")
-    
+
     submission_id = 1
     submissions_created = 0
-    
-    # Create a mapping of course_id to enrolled students
-    course_students = {}
+
+    # Map course_id -> list student_id đã enroll
+    course_students: dict[int, list[int]] = {}
     for student_id, course_id in enrollments:
-        if course_id not in course_students:
-            course_students[course_id] = []
-        course_students[course_id].append(student_id)
-    
+        course_students.setdefault(course_id, []).append(student_id)
+
+    # Map assignment_id -> object Assignment (để lấy deadline)
+    assignment_ids = [aid for aid, _ in assignment_data]
+    assignments = (
+        session.query(Assignment)
+        .filter(Assignment.assignment_id.in_(assignment_ids))
+        .all()
+    )
+    assignment_by_id = {a.assignment_id: a for a in assignments}
+
+    # Để tránh tạo trùng (assignment_id, student_id)
+    submitted_pairs: set[tuple[int, int]] = set()
+
+    # Nếu không có fixed_ids thì dùng logic random cũ
+    if fixed_ids is None:
+        for assignment_id, course_id in assignment_data:
+            if course_id not in course_students:
+                continue
+
+            students = course_students[course_id]
+            num_submissions = min(len(students), random.randint(2, 4))
+            submitting_students = random.sample(students, num_submissions)
+
+            for student_id in submitting_students:
+                if submissions_created >= max_submissions:
+                    break
+
+                score = (
+                    Decimal(str(round(random.uniform(60, 100), 2)))
+                    if random.random() > 0.2
+                    else None
+                )
+
+                base_deadline = assignment_by_id.get(assignment_id).deadline if assignment_id in assignment_by_id else datetime.now()
+                submitted_at = base_deadline - timedelta(days=random.randint(1, 20))
+                graded_at = (
+                    submitted_at + timedelta(days=random.randint(0, 5))
+                    if score is not None
+                    else None
+                )
+                comments = (
+                    "Good work!" if score and score > 80 else "Needs improvement" if score else None
+                )
+
+                submission = Submission(
+                    submission_id=submission_id,
+                    assignment_id=assignment_id,
+                    student_id=student_id,
+                    score=score,
+                    file_path=f"/uploads/submissions/{submission_id}_assignment_{assignment_id}.pdf",
+                    submitted_at=submitted_at,
+                    graded_at=graded_at,
+                    comments=comments,
+                )
+                session.add(submission)
+                submission_id += 1
+                submissions_created += 1
+
+            if submissions_created >= max_submissions:
+                break
+
+        session.commit()
+        print(f"Created {submissions_created} submissions (random-only)")
+        return
+
+    # ================== KỊCH BẢN FIXED USERS ==================
+    student1_id = fixed_ids["student1"]
+    student2_id = fixed_ids["student2"]
+
     for assignment_id, course_id in assignment_data:
+        if submissions_created >= max_submissions:
+            break
         if course_id not in course_students:
             continue
-            
-        # Random subset of enrolled students submit
+
         students = course_students[course_id]
-        num_submissions = min(len(students), random.randint(2, 4))
-        submitting_students = random.sample(students, num_submissions)
-        
-        for student_id in submitting_students:
-            score = Decimal(str(round(random.uniform(60, 100), 2))) if random.random() > 0.2 else None
-            
+        base_deadline = assignment_by_id.get(assignment_id).deadline if assignment_id in assignment_by_id else datetime.now()
+
+        # ---- 1) student1: luôn nộp, điểm cao, đúng/sớm hạn ----
+        if student1_id in students and (assignment_id, student1_id) not in submitted_pairs:
+            days_before = random.randint(0, 3)  # nộp sớm / đúng hạn
+            submitted_at = base_deadline - timedelta(days=days_before)
+            score_val = Decimal(str(round(random.uniform(85, 100), 2)))
+            graded_at = submitted_at + timedelta(days=random.randint(0, 3))
+            comment = "Excellent work!"
+
             submission = Submission(
                 submission_id=submission_id,
                 assignment_id=assignment_id,
-                student_id=student_id,
-                score=score,
+                student_id=student1_id,
+                score=score_val,
                 file_path=f"/uploads/submissions/{submission_id}_assignment_{assignment_id}.pdf",
-                submitted_at=datetime.now() - timedelta(days=random.randint(1, 20)),
-                graded_at=datetime.now() - timedelta(days=random.randint(0, 5)) if score else None,
-                comments="Good work!" if score and score > 80 else "Needs improvement" if score else None
+                submitted_at=submitted_at,
+                graded_at=graded_at,
+                comments=comment,
             )
             session.add(submission)
+            submitted_pairs.add((assignment_id, student1_id))
             submission_id += 1
             submissions_created += 1
-            
-            if submissions_created >= 30:
-                break
-        if submissions_created >= 30:
+
+        if submissions_created >= max_submissions:
             break
-    
+
+        # ---- 2) student2: nộp phần lớn, có thể trễ hoặc bỏ 1 số bài ----
+        if student2_id in students and (assignment_id, student2_id) not in submitted_pairs:
+            # 20% khả năng không nộp assignment này
+            if random.random() > 0.2:
+                delta_days = random.randint(-3, 5)  # có thể sớm 3 ngày, trễ 5 ngày
+                submitted_at = base_deadline + timedelta(days=delta_days)
+                score_val = Decimal(str(round(random.uniform(70, 95), 2)))
+                graded_at = submitted_at + timedelta(days=random.randint(0, 5))
+                comment = (
+                    "Good effort, but can be improved."
+                    if score_val < 85
+                    else "Good work!"
+                )
+
+                submission = Submission(
+                    submission_id=submission_id,
+                    assignment_id=assignment_id,
+                    student_id=student2_id,
+                    score=score_val,
+                    file_path=f"/uploads/submissions/{submission_id}_assignment_{assignment_id}.pdf",
+                    submitted_at=submitted_at,
+                    graded_at=graded_at,
+                    comments=comment,
+                )
+                session.add(submission)
+                submitted_pairs.add((assignment_id, student2_id))
+                submission_id += 1
+                submissions_created += 1
+
+        if submissions_created >= max_submissions:
+            break
+
+        # ---- 3) Các sinh viên khác: random giống logic cũ ----
+        other_students = [sid for sid in students if sid not in (student1_id, student2_id)]
+        if not other_students:
+            continue
+
+        num_submissions = min(len(other_students), random.randint(1, 3))
+        submitting_students = random.sample(other_students, num_submissions)
+
+        for sid in submitting_students:
+            if submissions_created >= max_submissions:
+                break
+            if (assignment_id, sid) in submitted_pairs:
+                continue
+
+            if random.random() > 0.2:
+                # nộp + có điểm
+                delta_days = random.randint(-2, 7)
+                submitted_at = base_deadline + timedelta(days=delta_days)
+                score_val = Decimal(str(round(random.uniform(60, 100), 2)))
+                graded_at = submitted_at + timedelta(days=random.randint(0, 7))
+                comment = "Good work!" if score_val > 80 else "Needs improvement"
+            else:
+                # nộp nhưng chưa chấm
+                submitted_at = base_deadline + timedelta(days=random.randint(-1, 3))
+                score_val = None
+                graded_at = None
+                comment = None
+
+            submission = Submission(
+                submission_id=submission_id,
+                assignment_id=assignment_id,
+                student_id=sid,
+                score=score_val,
+                file_path=f"/uploads/submissions/{submission_id}_assignment_{assignment_id}.pdf",
+                submitted_at=submitted_at,
+                graded_at=graded_at,
+                comments=comment,
+            )
+            session.add(submission)
+            submitted_pairs.add((assignment_id, sid))
+            submission_id += 1
+            submissions_created += 1
+
     session.commit()
-    print(f"Created {submissions_created} submissions")
+    print(f"Created {submissions_created} submissions (with fixed-user scenario)")
 
 
 def generate_quizzes_and_questions(session, course_ids):
@@ -673,118 +917,379 @@ def generate_quizzes_and_questions(session, course_ids):
     return quiz_ids
 
 
-def generate_quiz_attempts(session, quiz_ids, student_user_ids):
-    """Generate 15 quiz attempts"""
+def generate_quiz_attempts(session, quiz_ids, student_user_ids, enrollments, fixed_ids=None, max_attempts=40):
+    """Generate quiz attempts.
+       - Chỉ sinh attempt cho sinh viên đã enroll course tương ứng.
+       - student1: điểm cao, hầu hết quiz completed.
+       - student2: điểm khá, đôi khi in_progress hoặc làm sai nhiều hơn.
+       - Các sinh viên khác: random như cũ.
+    """
     print("Generating quiz attempts...")
-    
+
     attempt_id = 1
     detail_id = 1
     attempts_created = 0
-    
+
+    # Map course_id -> list student_id đã enroll
+    course_students: dict[int, list[int]] = {}
+    for student_id, course_id in enrollments:
+        course_students.setdefault(course_id, []).append(student_id)
+
+    # Lấy thông tin quiz (để biết course_id, thời gian)
+    quizzes = (
+        session.query(Quiz)
+        .filter(Quiz.quiz_id.in_(quiz_ids))
+        .all()
+    )
+    quiz_by_id = {q.quiz_id: q for q in quizzes}
+
+    # Nếu không có fixed_ids -> dùng logic gần giống cũ, nhưng tôn trọng enrollments
+    if fixed_ids is None:
+        for quiz_id in quiz_ids:
+            if attempts_created >= max_attempts:
+                break
+
+            quiz = quiz_by_id.get(quiz_id)
+            if quiz is None:
+                continue
+
+            students = course_students.get(quiz.course_id, [])
+            if not students:
+                continue
+
+            questions = session.query(QuizQuestion).filter(QuizQuestion.quiz_id == quiz_id).all()
+            if not questions:
+                continue
+
+            num_attempts = min(len(students), random.randint(2, 3))
+            attempting_students = random.sample(students, num_attempts)
+
+            for student_id in attempting_students:
+                if attempts_created >= max_attempts:
+                    break
+
+                # thời gian làm quiz
+                started_at = quiz.start_time + timedelta(
+                    minutes=random.randint(0, max(1, quiz.duration_minutes - 5))
+                )
+                status = random.choice(["completed", "completed", "completed", "in_progress"])
+                finished_at = (
+                    started_at + timedelta(minutes=random.randint(5, quiz.duration_minutes))
+                    if status == "completed"
+                    else None
+                )
+
+                total_score = Decimal("0.00")
+                attempt = QuizAttempt(
+                    attempt_id=attempt_id,
+                    quiz_id=quiz_id,
+                    student_id=student_id,
+                    started_at=started_at,
+                    finished_at=finished_at,
+                    total_score=None,
+                    status=status,
+                )
+                session.add(attempt)
+                session.flush()
+
+                for question in questions:
+                    # 70% đúng như cũ
+                    is_correct = random.random() > 0.3
+                    if is_correct:
+                        chosen = question.correct_option
+                    else:
+                        wrong_options = [opt for opt in ["A", "B", "C", "D"] if opt != question.correct_option]
+                        chosen = random.choice(wrong_options) if wrong_options else question.correct_option
+
+                    detail = QuizAttemptDetail(
+                        detail_id=detail_id,
+                        attempt_id=attempt_id,
+                        question_id=question.question_id,
+                        chosen_option=chosen,
+                        is_correct=is_correct,
+                    )
+                    session.add(detail)
+                    detail_id += 1
+
+                    if is_correct:
+                        total_score += question.points
+
+                if status == "completed":
+                    attempt.total_score = total_score
+
+                attempt_id += 1
+                attempts_created += 1
+
+        session.commit()
+        print(f"Created {attempts_created} quiz attempts (random-only)")
+        return
+
+    # ================== KỊCH BẢN FIXED USERS ==================
+    student1_id = fixed_ids["student1"]
+    student2_id = fixed_ids["student2"]
+
     for quiz_id in quiz_ids:
-        # Get questions for this quiz
+        if attempts_created >= max_attempts:
+            break
+
+        quiz = quiz_by_id.get(quiz_id)
+        if quiz is None:
+            continue
+
+        students = course_students.get(quiz.course_id, [])
+        if not students:
+            continue
+
         questions = session.query(QuizQuestion).filter(QuizQuestion.quiz_id == quiz_id).all()
         if not questions:
             continue
-        
-        # 2-3 students attempt each quiz
-        num_attempts = min(len(student_user_ids), random.randint(2, 3))
-        attempting_students = random.sample(student_user_ids, num_attempts)
-        
-        for student_id in attempting_students:
+
+        # --- Helper sinh 1 attempt với mức độ chính xác cho trước ---
+        def create_attempt_for_student(sid: int, accuracy: float, force_completed: bool = True, allow_in_progress: bool = False):
+            nonlocal attempt_id, detail_id, attempts_created
+
+            if attempts_created >= max_attempts:
+                return
+
+            started_at = quiz.start_time + timedelta(
+                minutes=random.randint(0, max(1, quiz.duration_minutes - 5))
+            )
+
+            if force_completed:
+                status = "completed"
+            elif allow_in_progress and random.random() < 0.2:
+                status = "in_progress"
+            else:
+                status = "completed"
+
+            finished_at = (
+                started_at + timedelta(minutes=random.randint(5, quiz.duration_minutes))
+                if status == "completed"
+                else None
+            )
+
             total_score = Decimal("0.00")
-            status = random.choice(["completed", "completed", "completed", "in_progress"])
-            
             attempt = QuizAttempt(
                 attempt_id=attempt_id,
                 quiz_id=quiz_id,
-                student_id=student_id,
-                started_at=datetime.now() - timedelta(hours=random.randint(1, 100)),
-                finished_at=datetime.now() - timedelta(hours=random.randint(0, 50)) if status == "completed" else None,
+                student_id=sid,
+                started_at=started_at,
+                finished_at=finished_at,
                 total_score=None,
-                status=status
+                status=status,
             )
             session.add(attempt)
             session.flush()
-            
-            # Create attempt details for each question
+
             for question in questions:
-                is_correct = random.random() > 0.3  # 70% chance of correct answer
-                chosen = question.correct_option if is_correct else random.choice(['A', 'B', 'C', 'D'])
-                
+                # accuracy: xác suất trả lời đúng
+                is_correct = random.random() < accuracy
+                if is_correct:
+                    chosen = question.correct_option
+                else:
+                    wrong_options = [opt for opt in ["A", "B", "C", "D"] if opt != question.correct_option]
+                    chosen = random.choice(wrong_options) if wrong_options else question.correct_option
+
                 detail = QuizAttemptDetail(
                     detail_id=detail_id,
                     attempt_id=attempt_id,
                     question_id=question.question_id,
                     chosen_option=chosen,
-                    is_correct=is_correct
+                    is_correct=is_correct,
                 )
                 session.add(detail)
                 detail_id += 1
-                
+
                 if is_correct:
                     total_score += question.points
-            
-            # Update total score if completed
+
             if status == "completed":
                 attempt.total_score = total_score
-            
+
             attempt_id += 1
             attempts_created += 1
-            
-            if attempts_created >= 15:
-                break
-        if attempts_created >= 15:
+
+        # --- 1) student1: nếu enroll course này thì hầu như luôn attempt, accuracy cao ---
+        if student1_id in students:
+            # 90% chính xác
+            create_attempt_for_student(student1_id, accuracy=0.9, force_completed=True)
+
+        if attempts_created >= max_attempts:
             break
-    
+
+        # --- 2) student2: nếu enroll course này thì thường attempt, accuracy trung bình-khá ---
+        if student2_id in students:
+            # 75% chính xác, đôi khi in_progress
+            create_attempt_for_student(student2_id, accuracy=0.75, force_completed=False, allow_in_progress=True)
+
+        if attempts_created >= max_attempts:
+            break
+
+        # --- 3) Các sinh viên khác: random như cũ ---
+        other_students = [sid for sid in students if sid not in (student1_id, student2_id)]
+        if not other_students:
+            continue
+
+        num_attempts = min(len(other_students), random.randint(1, 3))
+        attempting_students = random.sample(other_students, num_attempts)
+
+        for sid in attempting_students:
+            if attempts_created >= max_attempts:
+                break
+            # accuracy 70% như logic cũ
+            create_attempt_for_student(sid, accuracy=0.7, force_completed=False, allow_in_progress=True)
+
     session.commit()
-    print(f"Created {attempts_created} quiz attempts")
+    print(f"Created {attempts_created} quiz attempts (with fixed-user scenario)")
 
 
 def generate_messages(session, student_user_ids, lecturer_user_ids, manager_user_id):
-    """Generate 100 messages"""
+    """Generate ~100 messages with a storyline for fixed users (in English)."""
     print("Generating messages...")
-    
+
     all_user_ids = student_user_ids + lecturer_user_ids + [manager_user_id]
-    
-    message_templates = [
+
+    generic_templates = [
         "Hello! I have a question about the recent assignment.",
         "Thank you for your feedback on my submission.",
         "When is the next deadline for the project?",
-        "Can you please clarify the grading criteria?",
-        "I need help understanding the course material.",
+        "Could you please clarify the grading criteria?",
+        "I need some help understanding the course material.",
         "The lecture was very helpful, thank you!",
         "Is there any additional reading material available?",
         "I will be absent for the next class due to a medical appointment.",
         "Can we schedule a meeting to discuss my progress?",
         "Thank you for the extension on the assignment.",
-        "I have submitted my work, please review when possible.",
+        "I have submitted my work. Please review it when you have time.",
         "The study group session was very productive.",
     ]
-    
-    for msg_id in range(1, 101):
-        sender_id = random.choice(all_user_ids)
-        # Ensure receiver is different from sender
-        receiver_id = random.choice([uid for uid in all_user_ids if uid != sender_id])
-        
+
+    # Fixed users (by order)
+    student1_id = student_user_ids[0] if len(student_user_ids) > 0 else None
+    student2_id = student_user_ids[1] if len(student_user_ids) > 1 else None
+    lecturer1_id = lecturer_user_ids[0] if len(lecturer_user_ids) > 0 else None
+    lecturer2_id = lecturer_user_ids[1] if len(lecturer_user_ids) > 1 else None
+    manager_id = manager_user_id
+
+    # ============ 1. Scripted conversations (in English) ============
+    scripted_messages: list[tuple[int, int, str]] = []
+
+    # student1 <-> lecturer1: assignment questions, rubric, office hours
+    if student1_id and lecturer1_id:
+        scripted_messages.extend([
+            (student1_id, lecturer1_id, "Hi professor, I have a question about Assignment 2."),
+            (lecturer1_id, student1_id, "Sure, please check the example in last week's slides."),
+            (student1_id, lecturer1_id, "Got it now, thank you so much!"),
+            (lecturer1_id, student1_id, "If you need more help, feel free to join my office hours tomorrow."),
+            (student1_id, lecturer1_id, "Could you please explain the grading rubric for the final project?"),
+            (lecturer1_id, student1_id, "I've just uploaded the rubric to the LMS under the Assignments section."),
+        ])
+
+    # student2 <-> lecturer2: absence, extension, submission
+    if student2_id and lecturer2_id:
+        scripted_messages.extend([
+            (student2_id, lecturer2_id, "Hi, I might miss the lab session next week due to a medical appointment."),
+            (lecturer2_id, student2_id, "No problem. Please watch the recording and review the slides afterwards."),
+            (student2_id, lecturer2_id, "Could I get a one-day extension for the lab report, please?"),
+            (lecturer2_id, student2_id, "Yes, that's fine. Just make sure to submit it by tomorrow 11:59 PM."),
+            (student2_id, lecturer2_id, "I have submitted the lab report. Could you please take a look when you can?"),
+        ])
+
+    # manager <-> lecturers: progress and attendance
+    if manager_id and lecturer1_id and lecturer2_id:
+        scripted_messages.extend([
+            (manager_id, lecturer1_id, "Could you send me the midterm report for CS101, please?"),
+            (lecturer1_id, manager_id, "Sure, I will send it to you by the end of this week."),
+            (manager_id, lecturer2_id, "How is the attendance in IT201 this semester?"),
+            (lecturer2_id, manager_id, "Overall it's quite good. Most students attend regularly."),
+        ])
+
+    msg_id = 1
+    now = datetime.now()
+
+    # Insert scripted messages first
+    for sender_id, receiver_id, content in scripted_messages:
+        if sender_id is None or receiver_id is None:
+            continue
+
+        created_at = now - timedelta(hours=random.randint(10, 200))
         message = Message(
             message_id=msg_id,
             sender_id=sender_id,
             receiver_id=receiver_id,
-            content=random.choice(message_templates),
+            content=content,
             is_read=random.choice([True, True, False]),
-            created_at=datetime.now() - timedelta(hours=random.randint(1, 500))
+            created_at=created_at,
         )
         session.add(message)
-    
+        msg_id += 1
+
+    # ============ 2. Fill up to 100 messages with semi-random ones ============
+    def random_pair_student_lecturer():
+        if not student_user_ids or not lecturer_user_ids:
+            return None, None
+        s = random.choice(student_user_ids)
+        l = random.choice(lecturer_user_ids)
+        return s, l
+
+    def random_pair_lecturer_manager():
+        if not lecturer_user_ids:
+            return None, None
+        l = random.choice(lecturer_user_ids)
+        return l, manager_id
+
+    while msg_id <= 100:
+        conv_type = random.choice([
+            "student_to_lecturer",
+            "lecturer_to_student",
+            "lecturer_to_manager",
+            "random_any",
+        ])
+
+        sender_id = None
+        receiver_id = None
+
+        if conv_type == "student_to_lecturer":
+            s, l = random_pair_student_lecturer()
+            sender_id, receiver_id = s, l
+        elif conv_type == "lecturer_to_student":
+            s, l = random_pair_student_lecturer()
+            sender_id, receiver_id = l, s
+        elif conv_type == "lecturer_to_manager":
+            l, m = random_pair_lecturer_manager()
+            sender_id, receiver_id = l, m
+        else:
+            # fallback completely random
+            sender_id = random.choice(all_user_ids)
+            possible_receivers = [uid for uid in all_user_ids if uid != sender_id]
+            receiver_id = random.choice(possible_receivers) if possible_receivers else None
+
+        if sender_id is None or receiver_id is None or sender_id == receiver_id:
+            continue
+
+        content = random.choice(generic_templates)
+        created_at = now - timedelta(hours=random.randint(1, 500))
+
+        message = Message(
+            message_id=msg_id,
+            sender_id=sender_id,
+            receiver_id=receiver_id,
+            content=content,
+            is_read=random.choice([True, True, False]),
+            created_at=created_at,
+        )
+        session.add(message)
+        msg_id += 1
+
     session.commit()
-    print("Created 100 messages")
+    print(f"Created {msg_id - 1} messages")
 
 
-def generate_feedback(session, enrollments):
+def generate_feedback(session, enrollments, fixed_ids=None, max_feedback=50):
     print("Generating feedback...")
 
-    feedback_templates = [
+    # Generic templates cho sinh viên còn lại
+    generic_templates = [
         "Excellent course! The professor explains concepts very clearly.",
         "Good course content but could use more practical examples.",
         "The assignments were challenging but helped me learn a lot.",
@@ -795,33 +1300,112 @@ def generate_feedback(session, enrollments):
         "Could benefit from more group projects.",
     ]
 
-    # Lấy các cặp (student_id, course_id) unique
+    # Templates riêng cho student1 (rất tích cực)
+    s1_templates = [
+        "This course was extremely helpful and well-organized.",
+        "The instructor explained every concept clearly and in depth.",
+        "Assignments and projects were very meaningful and aligned with the lectures.",
+        "I learned a lot from this course. Highly recommended!",
+    ]
+
+    # Templates riêng cho student2 (mixed, có khen có góp ý)
+    s2_templates = [
+        "The content was useful, but some topics felt a bit rushed.",
+        "Overall a good course, though a bit heavy near the end.",
+        "The instructor was very supportive, but the workload was quite high.",
+        "Good course, but I would appreciate clearer instructions for some assignments.",
+    ]
+
+    # Unique (student_id, course_id)
     unique_enrollments = list(set(enrollments))
     random.shuffle(unique_enrollments)
 
-    # Số feedback tối đa có thể tạo
-    max_feedback = min(50, len(unique_enrollments))
+    # Map student -> list course
+    from collections import defaultdict
+    courses_by_student: dict[int, list[int]] = defaultdict(list)
+    for s_id, c_id in unique_enrollments:
+        courses_by_student[s_id].append(c_id)
 
-    for feedback_id in range(1, max_feedback + 1):
-        student_id, course_id = unique_enrollments[feedback_id - 1]
+    feedback_id = 1
+    used_pairs: set[tuple[int, int]] = set()
+
+    # ===== 1) Nếu có fixed_ids -> ưu tiên tạo feedback cho student1 & student2 =====
+    if fixed_ids is not None:
+        student1_id = fixed_ids.get("student1")
+        student2_id = fixed_ids.get("student2")
+
+        # --- Feedback cho student1 ---
+        if student1_id in courses_by_student:
+            random.shuffle(courses_by_student[student1_id])
+            for course_id in courses_by_student[student1_id][:5]:
+                if feedback_id > max_feedback:
+                    break
+                pair = (student1_id, course_id)
+                if pair in used_pairs:
+                    continue
+
+                feedback = Feedback(
+                    feedback_id=feedback_id,
+                    content=random.choice(s1_templates),
+                    rating=random.randint(4, 5),
+                    student_id=student1_id,
+                    course_id=course_id,
+                    created_at=datetime.now() - timedelta(days=random.randint(1, 60)),
+                )
+                session.add(feedback)
+                used_pairs.add(pair)
+                feedback_id += 1
+
+        # --- Feedback cho student2 ---
+        if student2_id in courses_by_student and feedback_id <= max_feedback:
+            random.shuffle(courses_by_student[student2_id])
+            for course_id in courses_by_student[student2_id][:5]:
+                if feedback_id > max_feedback:
+                    break
+                pair = (student2_id, course_id)
+                if pair in used_pairs:
+                    continue
+
+                feedback = Feedback(
+                    feedback_id=feedback_id,
+                    content=random.choice(s2_templates),
+                    rating=random.randint(3, 5),
+                    student_id=student2_id,
+                    course_id=course_id,
+                    created_at=datetime.now() - timedelta(days=random.randint(1, 60)),
+                )
+                session.add(feedback)
+                used_pairs.add(pair)
+                feedback_id += 1
+
+    # ===== 2) Phần còn lại: random cho các enrollment khác =====
+    for (student_id, course_id) in unique_enrollments:
+        if feedback_id > max_feedback:
+            break
+        pair = (student_id, course_id)
+        if pair in used_pairs:
+            continue
 
         feedback = Feedback(
             feedback_id=feedback_id,
-            content=random.choice(feedback_templates),
+            content=random.choice(generic_templates),
             rating=random.randint(3, 5),
             student_id=student_id,
             course_id=course_id,
             created_at=datetime.now() - timedelta(days=random.randint(1, 60)),
         )
         session.add(feedback)
+        used_pairs.add(pair)
+        feedback_id += 1
 
     session.commit()
-    print(f"Created {max_feedback} feedback entries")
+    print(f"Created {feedback_id - 1} feedback entries")
 
-def generate_course_ratings(session, enrollments):
+
+def generate_course_ratings(session, enrollments, fixed_ids=None, max_ratings=20):
     print("Generating course ratings...")
 
-    rating_comments = [
+    generic_comments = [
         "Loved this course!",
         "Very helpful for my career.",
         "Great instructor.",
@@ -829,49 +1413,189 @@ def generate_course_ratings(session, enrollments):
         "Challenging but rewarding.",
     ]
 
+    s1_comments = [
+        "One of the best courses I have taken.",
+        "Highly relevant and very well organized.",
+        "The teaching style and course structure were excellent.",
+    ]
+
+    s2_comments = [
+        "Good course overall, but a bit intense at times.",
+        "Useful content, though some parts were hard to follow.",
+        "The course was helpful, but the pace could be improved.",
+    ]
+
     unique_enrollments = list(set(enrollments))
     random.shuffle(unique_enrollments)
 
-    max_ratings = min(20, len(unique_enrollments))
+    from collections import defaultdict
+    courses_by_student: dict[int, list[int]] = defaultdict(list)
+    for s_id, c_id in unique_enrollments:
+        courses_by_student[s_id].append(c_id)
 
-    for rating_id in range(1, max_ratings + 1):
-        student_id, course_id = unique_enrollments[rating_id - 1]
+    rating_id = 1
+    used_pairs: set[tuple[int, int]] = set()
+
+    # ===== 1) Ratings cho student1 & student2 nếu có fixed_ids =====
+    if fixed_ids is not None:
+        student1_id = fixed_ids.get("student1")
+        student2_id = fixed_ids.get("student2")
+
+        # student1: rating khá cao
+        if student1_id in courses_by_student:
+            random.shuffle(courses_by_student[student1_id])
+            for course_id in courses_by_student[student1_id][:5]:
+                if rating_id > max_ratings:
+                    break
+                pair = (student1_id, course_id)
+                if pair in used_pairs:
+                    continue
+
+                rating = CourseRating(
+                    rating_id=rating_id,
+                    student_id=student1_id,
+                    course_id=course_id,
+                    rating=random.randint(4, 5),
+                    comment=random.choice(s1_comments),
+                    created_at=datetime.now() - timedelta(days=random.randint(1, 60)),
+                )
+                session.add(rating)
+                used_pairs.add(pair)
+                rating_id += 1
+
+        # student2: rating hỗn hợp
+        if student2_id in courses_by_student and rating_id <= max_ratings:
+            random.shuffle(courses_by_student[student2_id])
+            for course_id in courses_by_student[student2_id][:5]:
+                if rating_id > max_ratings:
+                    break
+                pair = (student2_id, course_id)
+                if pair in used_pairs:
+                    continue
+
+                rating = CourseRating(
+                    rating_id=rating_id,
+                    student_id=student2_id,
+                    course_id=course_id,
+                    rating=random.randint(3, 5),
+                    comment=random.choice(s2_comments) if random.random() > 0.2 else None,
+                    created_at=datetime.now() - timedelta(days=random.randint(1, 60)),
+                )
+                session.add(rating)
+                used_pairs.add(pair)
+                rating_id += 1
+
+    # ===== 2) Ratings random cho các enrollment khác =====
+    for (student_id, course_id) in unique_enrollments:
+        if rating_id > max_ratings:
+            break
+        pair = (student_id, course_id)
+        if pair in used_pairs:
+            continue
 
         rating = CourseRating(
             rating_id=rating_id,
             student_id=student_id,
             course_id=course_id,
             rating=random.randint(3, 5),
-            comment=random.choice(rating_comments) if random.random() > 0.3 else None,
+            comment=random.choice(generic_comments) if random.random() > 0.3 else None,
             created_at=datetime.now() - timedelta(days=random.randint(1, 60)),
         )
         session.add(rating)
+        used_pairs.add(pair)
+        rating_id += 1
 
     session.commit()
-    print(f"Created {max_ratings} course ratings")
+    print(f"Created {rating_id - 1} course ratings")
+
 
 def generate_materials(session, course_ids):
-    """Generate course materials"""
+    """Generate course materials, more realistic by type and course."""
     print("Generating course materials...")
-    
+
     material_types = ["lecture", "document", "video", "quiz"]
     material_id = 1
-    
+
+    # Lấy thông tin course để dùng tên và semester
+    courses = (
+        session.query(Course)
+        .filter(Course.course_id.in_(course_ids))
+        .all()
+    )
+    course_by_id = {c.course_id: c for c in courses}
+
     for course_id in course_ids:
-        for i in range(random.randint(2, 4)):
+        course = course_by_id.get(course_id)
+        course_name = course.Course_name if hasattr(course, "Course_name") else getattr(course, "course_name", f"Course {course_id}")
+        semester_str = course.semester if hasattr(course, "semester") else "2024-1"
+
+        # Số materials cho mỗi course: 3–6 thay vì 2–4
+        num_materials = random.randint(3, 6)
+
+        for i in range(num_materials):
             mat_type = random.choice(material_types)
+
+            # Đổi title theo loại tài liệu
+            if mat_type == "lecture":
+                title = f"{course_name} - Lecture {i+1}"
+            elif mat_type == "document":
+                title = f"{course_name} - Reference Document {i+1}"
+            elif mat_type == "video":
+                title = f"{course_name} - Video Lesson {i+1}"
+            else:  # quiz
+                title = f"{course_name} - Quiz Resources {i+1}"
+
+            description = f"{mat_type.capitalize()} material for the course {course_name}."
+
+            # Chọn đuôi file phù hợp
+            if mat_type == "video":
+                ext = "mp4"
+            else:
+                ext = "pdf"
+
+            file_path = f"/uploads/materials/{course_id}_{material_id}.{ext}"
+
+            # Upload date dựa trên semester (nếu bạn đã dùng format YYYY-1/2/3)
+            try:
+                year_str, term_str = semester_str.split("-")
+                academic_year = int(year_str)
+                term = int(term_str)
+            except Exception:
+                academic_year = 2024
+                term = 1
+
+            if term == 1:
+                year_full = academic_year
+                month = 9
+            elif term == 2:
+                year_full = academic_year + 1
+                month = 1
+            else:
+                year_full = academic_year + 1
+                month = 6
+
+            # random trong 0–30 ngày đầu học kỳ
+            day = random.randint(1, 28)
+            upload_date = datetime(
+                year_full,
+                month,
+                day,
+                random.randint(8, 20),
+                random.randint(0, 59),
+            )
+
             material = Materials(
-                materials_id=material_id,
+                materials_id=material_id,   # hoặc Materials_id nếu model viết hoa
                 course_id=course_id,
                 type=mat_type,
-                title=f"Course Material {material_id}: {mat_type.capitalize()}",
-                description=f"This is a {mat_type} resource for the course.",
-                file_path=f"/uploads/materials/{course_id}_{material_id}.pdf",
-                upload_date=datetime.now() - timedelta(days=random.randint(1, 90))
+                title=title,
+                description=description,
+                file_path=file_path,
+                upload_date=upload_date,
             )
             session.add(material)
             material_id += 1
-    
+
     session.commit()
     print(f"Created {material_id - 1} course materials")
 
@@ -890,15 +1614,22 @@ def main():
         
         # Generate data in order
         student_user_ids, lecturer_user_ids, manager_user_id = generate_users(session)
+        fixed_ids = {
+            "student1": student_user_ids[0],
+            "student2": student_user_ids[1],
+            "lecturer1": lecturer_user_ids[0],
+            "lecturer2": lecturer_user_ids[1],
+            "manager": manager_user_id,
+        }
         course_ids = generate_courses(session, lecturer_user_ids)
-        enrollments = generate_enrollments(session, student_user_ids, course_ids)
+        enrollments = generate_enrollments(session, student_user_ids, course_ids, fixed_ids=fixed_ids)
         assignment_data = generate_assignments(session, course_ids)
-        generate_submissions(session, assignment_data, enrollments)
+        generate_submissions(session, assignment_data, enrollments, fixed_ids=fixed_ids)
         quiz_ids = generate_quizzes_and_questions(session, course_ids)
-        generate_quiz_attempts(session, quiz_ids, student_user_ids)
+        generate_quiz_attempts(session, quiz_ids, student_user_ids, enrollments, fixed_ids=fixed_ids)
         generate_messages(session, student_user_ids, lecturer_user_ids, manager_user_id)
-        generate_feedback(session, enrollments)
-        generate_course_ratings(session, enrollments)
+        generate_feedback(session, enrollments, fixed_ids=fixed_ids)
+        generate_course_ratings(session, enrollments, fixed_ids=fixed_ids)
         generate_materials(session, course_ids)
         
         print("\n" + "=" * 50)
