@@ -48,7 +48,7 @@ const gpaData = [
   { semester: "223", semesterGPA: 3.1, overallGPA: 3.1 },
   { semester: "231", semesterGPA: 3.2, overallGPA: 3.2 },
   { semester: "232", semesterGPA: 3.3, overallGPA: 3.3 },
-  { semester: "233", semesterGPA: 3.5, overallGPA: 3.4 },
+  { semester: "233", semesterGPA: 3.7, overallGPA: 3.4 },
 ];
 
 const StudentDashboardPage: React.FC = () => {

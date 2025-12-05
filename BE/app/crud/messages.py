@@ -16,11 +16,11 @@ def _get_user_full_name(db: Session, user_id: int) -> str:
     if user.role == "student":
         student = db.query(models.Student).filter(models.Student.user_id == user_id).first()
         if student:
-            return " ".join(filter(None, [student.fname, student.mname, student.lname]))
+            return " ".join(filter(None, [student.fname, student.lname, student.mname]))
     elif user.role == "lecturer":
         lecturer = db.query(models.Lecturer).filter(models.Lecturer.user_id == user_id).first()
         if lecturer:
-            return " ".join(filter(None, [lecturer.title, lecturer.fname, lecturer.mname, lecturer.lname]))
+            return " ".join(filter(None, [lecturer.title, lecturer.fname, lecturer.lname, lecturer.mname]))
     elif user.role == "manager":
         manager = db.query(models.Manager).filter(models.Manager.user_id == user_id).first()
         if manager:

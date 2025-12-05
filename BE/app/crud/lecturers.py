@@ -11,13 +11,13 @@ def _full_name(lecturer: models.Lecturer) -> str:
     return " ".join(filter(None, [
         lecturer.title,
         lecturer.fname,
-        lecturer.mname,
-        lecturer.lname
+        lecturer.lname,
+        lecturer.mname
     ]))
 
 
 def _student_full_name(student: models.Student) -> str:
-    return " ".join(filter(None, [student.fname, student.mname, student.lname]))
+    return " ".join(filter(None, [student.fname, student.lname, student.mname]))
 
 
 def get_all_lecturers(db: Session) -> List[schemas.LecturerListItem]:

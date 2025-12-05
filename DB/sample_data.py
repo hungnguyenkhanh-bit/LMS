@@ -108,8 +108,8 @@ QUIZ_QUESTIONS_TEMPLATES = [
 ]
 
 # Total users by roles
-NUM_STUDENTS_TOTAL = 10
-NUM_LECTURERS_TOTAL = 5
+NUM_STUDENTS_TOTAL = 1000
+NUM_LECTURERS_TOTAL = 50
 NUM_MANAGERS_TOTAL = 1
 
 FIXED_STUDENTS = STUDENT_DATA[:2]
@@ -618,8 +618,10 @@ def generate_enrollments(session, student_user_ids, course_ids, fixed_ids=None):
     print(f"Created {enroll_id - 1} enrollments (with fixed-user scenario)")
     return enrollments
 
+
+# add status field to Assignment model before using this function
 def generate_assignments(session, course_ids):
-    """Generate 20 assignments across courses"""
+    """Generate 200 assignments across courses"""
     print("Generating assignments...")
     
     assignment_data = []
@@ -651,9 +653,9 @@ def generate_assignments(session, course_ids):
             assignment_data.append((assignment_id, course_id))
             assignment_id += 1
             
-            if assignment_id > 20:
+            if assignment_id > 200:
                 break
-        if assignment_id > 20:
+        if assignment_id > 200:
             break
     
     session.commit()
@@ -661,7 +663,7 @@ def generate_assignments(session, course_ids):
     return assignment_data
 
 
-def generate_submissions(session, assignment_data, enrollments, fixed_ids=None, max_submissions=60):
+def generate_submissions(session, assignment_data, enrollments, fixed_ids=None, max_submissions=500):
     """Generate submissions.
        - student1: luôn nộp, điểm cao, đúng/sớm hạn
        - student2: nộp phần lớn, điểm trung bình-khá, đôi khi trễ hoặc không nộp

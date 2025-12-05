@@ -13,6 +13,7 @@ interface Course {
   lecturer_name: string | null;
   enrolled_count: number;
   description: string | null;
+  image_url?: string; // Optional course cover image
 }
 
 const courseColors = [
@@ -31,6 +32,14 @@ export default function MyCoursesPage() {
   const [allCourses, setAllCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [showEnrollModal, setShowEnrollModal] = useState(false);
+  const fallbackImages = [
+    "https://images.unsplash.com/photo-1523580846011-d3a5bc25702b?auto=format&fit=crop&w=1200&q=60",
+    "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1200&q=60",
+    "https://images.unsplash.com/photo-1461749280684-dccba630e2f6?auto=format&fit=crop&w=1200&q=60",
+    "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=1200&q=60",
+    "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=1200&q=60",
+    "https://images.unsplash.com/photo-1481627834876-b7833e8f5570?auto=format&fit=crop&w=1200&q=60",
+  ];
 
   useEffect(() => {
     const fetchCourses = async () => {
@@ -127,18 +136,40 @@ export default function MyCoursesPage() {
                 <div
                   className="mt-16"
                   style={{
-                    height: "140px",
-                    background: courseColors[index % courseColors.length],
+                    position: "relative",
+                    height: "160px",
                     borderRadius: "14px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "#fff",
-                    fontSize: "24px",
-                    fontWeight: "bold",
+                    overflow: "hidden",
+                    background: courseColors[index % courseColors.length],
                   }}
                 >
-                  {course.code}
+                  <img
+                    src={course.image_url || fallbackImages[index % fallbackImages.length]}
+                    alt={`${course.name} cover`}
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                    onError={(e) => {
+                      // Gracefully fall back to a solid background if image fails
+                      e.currentTarget.style.display = "none";
+                    }}
+                  />
+                  <div
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      background: "linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.55) 100%)",
+                      display: "flex",
+                      alignItems: "flex-end",
+                      padding: "12px 14px",
+                      color: "#f9fafb",
+                      fontWeight: 700,
+                      letterSpacing: "0.3px",
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: "14px", opacity: 0.8 }}>Code</div>
+                      <div style={{ fontSize: "18px" }}>{course.code}</div>
+                    </div>
+                  </div>
                 </div>
                 <p className="small-caption mt-8" style={{ 
                   overflow: "hidden", 

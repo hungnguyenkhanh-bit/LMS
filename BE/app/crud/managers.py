@@ -54,7 +54,7 @@ def get_all_students(db: Session) -> List[schemas.StudentListItem]:
         result.append(schemas.StudentListItem(
             user_id=student.user_id,
             student_id=student.student_id,
-            full_name=" ".join(filter(None, [student.fname, student.mname, student.lname])),
+            full_name=" ".join(filter(None, [student.fname, student.lname, student.mname])),
             major=student.major,
             current_gpa=float(student.current_gpa) if student.current_gpa else 0.0,
             email=user.email if user else None
@@ -74,8 +74,8 @@ def get_all_lecturers(db: Session) -> List[schemas.LecturerListItem]:
             full_name=" ".join(filter(None, [
                 lecturer.title,
                 lecturer.fname,
-                lecturer.mname,
-                lecturer.lname
+                lecturer.lname,
+                lecturer.mname
             ])),
             department=lecturer.department,
             email=user.email if user else None
@@ -94,8 +94,8 @@ def get_all_courses(db: Session) -> List[schemas.CourseSummary]:
             lecturer_name = " ".join(filter(None, [
                 course.lecturer.title,
                 course.lecturer.fname,
-                course.lecturer.mname,
-                course.lecturer.lname
+                course.lecturer.lname,
+                course.lecturer.mname
             ]))
         
         enrolled_count = db.query(models.Enroll).filter(
@@ -137,8 +137,8 @@ def create_course(db: Session, payload: schemas.CourseCreate) -> schemas.CourseS
         lecturer_name = " ".join(filter(None, [
             course.lecturer.title,
             course.lecturer.fname,
-            course.lecturer.mname,
-            course.lecturer.lname
+            course.lecturer.lname,
+            course.lecturer.mname
         ]))
     
     return schemas.CourseSummary(
@@ -181,8 +181,8 @@ def update_course(db: Session, course_id: int, payload: schemas.CourseUpdate) ->
         lecturer_name = " ".join(filter(None, [
             course.lecturer.title,
             course.lecturer.fname,
-            course.lecturer.mname,
-            course.lecturer.lname
+            course.lecturer.lname,
+            course.lecturer.mname
         ]))
     
     enrolled_count = db.query(models.Enroll).filter(
@@ -231,8 +231,8 @@ def assign_lecturer_to_course(db: Session, course_id: int, lecturer_id: int) -> 
     lecturer_name = " ".join(filter(None, [
         lecturer.title,
         lecturer.fname,
-        lecturer.mname,
-        lecturer.lname
+        lecturer.lname,
+        lecturer.mname
     ]))
     
     enrolled_count = db.query(models.Enroll).filter(

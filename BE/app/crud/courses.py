@@ -12,14 +12,14 @@ def _lecturer_full_name(lecturer: models.Lecturer) -> str:
     return " ".join(filter(None, [
         lecturer.title,
         lecturer.fname,
-        lecturer.mname,
-        lecturer.lname
+        lecturer.lname,
+        lecturer.mname
     ]))
 
 
 def _student_full_name(student: models.Student) -> str:
     """Build full name from student model"""
-    return " ".join(filter(None, [student.fname, student.mname, student.lname]))
+    return " ".join(filter(None, [student.fname, student.lname, student.mname]))
 
 
 def list_courses(db: Session) -> List[schemas.CourseSummary]:

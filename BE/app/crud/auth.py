@@ -88,7 +88,7 @@ def get_user_profile(db: Session, user: models.User) -> schemas.UserProfile:
     if role == "student":
         student = db.query(models.Student).filter(models.Student.user_id == user.user_id).first()
         if student:
-            profile_data["full_name"] = " ".join(filter(None, [student.fname, student.mname, student.lname]))
+            profile_data["full_name"] = " ".join(filter(None, [student.fname, student.lname, student.mname]))
             profile_data["student_id"] = student.student_id
             profile_data["major"] = student.major
             profile_data["current_gpa"] = float(student.current_gpa) if student.current_gpa else None
@@ -96,7 +96,7 @@ def get_user_profile(db: Session, user: models.User) -> schemas.UserProfile:
     elif role == "lecturer":
         lecturer = db.query(models.Lecturer).filter(models.Lecturer.user_id == user.user_id).first()
         if lecturer:
-            profile_data["full_name"] = " ".join(filter(None, [lecturer.fname, lecturer.mname, lecturer.lname]))
+            profile_data["full_name"] = " ".join(filter(None, [lecturer.fname, lecturer.lname, lecturer.mname]))
             profile_data["title"] = lecturer.title
             profile_data["department"] = lecturer.department
     

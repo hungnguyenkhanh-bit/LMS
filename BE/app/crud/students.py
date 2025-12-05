@@ -8,7 +8,7 @@ from app import models, schemas
 
 
 def _full_name(student: models.Student) -> str:
-    return " ".join(filter(None, [student.fname, student.mname, student.lname]))
+    return " ".join(filter(None, [student.fname, student.lname, student.mname]))
 
 
 def _find_student(db: Session, student_id: int) -> Optional[models.Student]:
@@ -112,8 +112,8 @@ def get_student_courses(db: Session, student_id: int) -> List[schemas.CourseSumm
                 lecturer_name = " ".join(filter(None, [
                     course.lecturer.title,
                     course.lecturer.fname,
-                    course.lecturer.mname,
-                    course.lecturer.lname
+                    course.lecturer.lname,
+                    course.lecturer.mname
                 ]))
             
             enrolled_count = db.query(models.Enroll).filter(
