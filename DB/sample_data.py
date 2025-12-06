@@ -14,6 +14,7 @@ from faker import Faker
 from pathlib import Path
 import csv
 import calendar
+import unicodedata
 
 faker = Faker("vi_VN")  # Vietnamese name for random user generation
 
@@ -157,6 +158,25 @@ def generate_unique_student_id(used_ids: set[int]) -> int:
             used_ids.add(sid)
             return sid
 
+
+def _sanitize_email_local(local_part: str) -> str:
+    normalized = unicodedata.normalize("NFKD", local_part)
+    ascii_local = normalized.encode("ascii", "ignore").decode("ascii")
+    cleaned = "".join(ch if ch.isalnum() else "." for ch in ascii_local.lower())
+    cleaned = cleaned.strip(".")
+    return cleaned or "user"
+
+
+def generate_unique_email(local_part: str, domain: str, used_emails: set[str]) -> str:
+    base_local = _sanitize_email_local(local_part)
+    candidate = f"{base_local}@{domain}"
+    counter = 1
+    while candidate in used_emails:
+        candidate = f"{base_local}{counter}@{domain}"
+        counter += 1
+    used_emails.add(candidate)
+    return candidate
+
 def generate_users(session):
     """Generate users, students, lecturers, and manager (fixed + random mix)"""
     print("Generating users...")
@@ -167,12 +187,14 @@ def generate_users(session):
     
     user_id_counter = 1
     used_student_ids: set[int] = set()
+    used_emails: set[str] = set()
     
     # ========= 1) 2 STUDENT CỐ ĐỊNH =========
     for i, data in enumerate(FIXED_STUDENTS):
         # MSSV unique, giống Populate_data.py
         student_id = generate_unique_student_id(used_student_ids)
-        email = f"{data['fname'].lower()}.{data['lname'].lower()}{student_id}@student.university.edu"
+        email_local = f"{data['fname']}.{data['lname']}{student_id}"
+        email = generate_unique_email(email_local, "student.university.edu", used_emails)
         
         # username: student1, student2
         user = User(
@@ -224,7 +246,8 @@ def generate_users(session):
         
         # MSSV unique
         student_id = generate_unique_student_id(used_student_ids)
-        email = f"{fname.lower()}.{lname.lower()}{student_id}@student.university.edu"
+        email_local = f"{fname}.{lname}{student_id}"
+        email = generate_unique_email(email_local, "student.university.edu", used_emails)
         
         user = User(
             user_id=user_id_counter,
@@ -254,7 +277,8 @@ def generate_users(session):
     
     # ========= 3) 2 LECTURER CỐ ĐỊNH =========
     for i, data in enumerate(FIXED_LECTURERS):
-        email = f"{data['fname'].lower()}.{data['lname'].lower()}@university.edu"
+        email_local = f"{data['fname']}.{data['lname']}"
+        email = generate_unique_email(email_local, "university.edu", used_emails)
         
         user = User(
             user_id=user_id_counter,
@@ -299,7 +323,8 @@ def generate_users(session):
         dept = random.choice(departments)
         title = random.choice(titles)
         
-        email = f"{fname.lower()}.{lname.lower()}@university.edu"
+        email_local = f"{fname}.{lname}"
+        email = generate_unique_email(email_local, "university.edu", used_emails)
         
         user = User(
             user_id=user_id_counter,
@@ -324,12 +349,13 @@ def generate_users(session):
         user_id_counter += 1
     
     # ========= 5) MANAGER CỐ ĐỊNH =========
+    manager_email = generate_unique_email("admin.manager", "university.edu", used_emails)
     user = User(
         user_id=user_id_counter,
         username="manager1",
         password_hash=DEFAULT_PASSWORD,
         role="manager",
-        email="admin.manager@university.edu",
+        email=manager_email,
     )
     session.add(user)
     session.flush()

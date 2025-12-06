@@ -79,7 +79,8 @@ CREATE TABLE course (
     capacity     INT NOT NULL DEFAULT 50,
     semester     VARCHAR(20) NOT NULL,
     lecturer_id  INT REFERENCES lecturer(user_id) ON DELETE SET NULL,
-    description  TEXT
+    description  TEXT,
+    image_url VARCHAR(500)
 );
 
 CREATE TABLE enroll (
