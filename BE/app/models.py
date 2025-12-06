@@ -94,6 +94,8 @@ class Course(Base):
     lecturer_id = Column(Integer, ForeignKey("lecturer.user_id", ondelete="SET NULL"))
     description = Column(Text)
 
+    image_url = Column(String(255), nullable=True)
+
     lecturer = relationship("Lecturer", back_populates="courses")
     materials = relationship("Materials", back_populates="course")
     enrollments = relationship("Enroll", back_populates="course")

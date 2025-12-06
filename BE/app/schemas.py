@@ -159,6 +159,7 @@ class CourseSummary(BaseModel):
     lecturer_name: Optional[str] = None
     enrolled_count: Optional[int] = None
     description: Optional[str] = None
+    image_url: Optional[str] = None
 
 
 class CourseCreate(BaseModel):

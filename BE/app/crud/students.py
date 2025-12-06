@@ -122,6 +122,7 @@ def get_student_courses(db: Session, student_id: int) -> List[schemas.CourseSumm
             
             result.append(schemas.CourseSummary(
                 id=course.course_id,
+                image_url=getattr(course, "image_url", None),
                 code=course.course_code,
                 name=course.course_name,
                 credits=course.credits,

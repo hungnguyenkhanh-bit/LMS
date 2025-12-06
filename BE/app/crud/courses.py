@@ -45,7 +45,8 @@ def list_courses(db: Session) -> List[schemas.CourseSummary]:
             capacity=course.capacity,
             lecturer_name=lecturer_name,
             enrolled_count=enrolled_count,
-            description=course.description
+            description=course.description,
+            image_url=getattr(course, "image_url", None)
         ))
     
     return result

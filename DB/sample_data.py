@@ -429,22 +429,26 @@ def load_course_data_from_csv(path: Path | None = None):
     print(f"[load_course_data_from_csv] Đã load {len(courses)} môn từ '{path}'.")
     return courses
 
+def get_course_image_url(course_code: str) -> str:
+    """
+    Tạo URL ảnh từ web (Picsum) dựa trên course_code.
+    Mỗi course_code sẽ có một ảnh khác nhau nhưng cố định.
+    """
+    # seed không được có dấu cách, nên thay bằng '-'
+    safe_code = course_code.replace(" ", "-")
+    # 800x400 tuỳ bạn chỉnh
+    return f"https://picsum.photos/seed/{safe_code}/800/400"
 
 def generate_courses(session, lecturer_user_ids):
-    """Generate courses from mon_all.csv and assign to lecturers"""
     print("Generating courses...")
 
-    # 1. Load dữ liệu course từ CSV
+    course_ids = []
     course_data = load_course_data_from_csv()
-
-    # 2. Nếu CSV rỗng / lỗi -> fallback về COURSE_DATA (để script vẫn chạy)
     if not course_data:
         print("Không load được course từ CSV, dùng COURSE_DATA mặc định.")
         course_data = COURSE_DATA
 
-    course_ids = []
     for i, data in enumerate(course_data):
-        # Assign lecturers in round-robin
         lecturer_id = lecturer_user_ids[i % len(lecturer_user_ids)]
 
         course = Course(
@@ -456,6 +460,7 @@ def generate_courses(session, lecturer_user_ids):
             semester=data["semester"],
             lecturer_id=lecturer_id,
             description=f"This course covers {data['name'].lower()} concepts and practical applications.",
+            image_url=get_course_image_url(data["code"]),
         )
         session.add(course)
         course_ids.append(i + 1)
@@ -513,7 +518,6 @@ def generate_enrollments(session, student_user_ids, course_ids, fixed_ids=None):
         print("Không có course_ids nào, bỏ qua generate_enrollments.")
         return []
 
-    enroll_id = 1
     enrollments: list[tuple[int, int]] = []
 
     # Lấy info course từ DB để biết semester + lecturer_id
@@ -532,7 +536,7 @@ def generate_enrollments(session, student_user_ids, course_ids, fixed_ids=None):
                 enrolled_at = enrolled_at_from_semester(semester_str)
 
                 enroll = Enroll(
-                    enroll_id=enroll_id,
+                    # KHÔNG set enroll_id nữa → để DB tự tăng
                     course_id=course_id,
                     student_id=student_id,
                     semester=semester_str,
@@ -541,10 +545,9 @@ def generate_enrollments(session, student_user_ids, course_ids, fixed_ids=None):
                 )
                 session.add(enroll)
                 enrollments.append((student_id, course_id))
-                enroll_id += 1
 
         session.commit()
-        print(f"Created {enroll_id - 1} enrollments")
+        print(f"Created {len(enrollments)} enrollments")
         return enrollments
 
     # === Kịch bản cho user cố định ===
@@ -566,8 +569,9 @@ def generate_enrollments(session, student_user_ids, course_ids, fixed_ids=None):
         chosen = []
 
         # Lấy ưu tiên từ core_list
-        random.shuffle(core_list)
-        for c_id in core_list:
+        core_copy = list(core_list)
+        random.shuffle(core_copy)
+        for c_id in core_copy:
             if len(chosen) >= max_n:
                 break
             chosen.append(c_id)
@@ -589,7 +593,6 @@ def generate_enrollments(session, student_user_ids, course_ids, fixed_ids=None):
         semester_str = course_by_id[course_id].semester
         enrolled_at = enrolled_at_from_semester(semester_str)
         enroll = Enroll(
-            enroll_id=enroll_id,
             course_id=course_id,
             student_id=student1_id,
             semester=semester_str,
@@ -598,7 +601,6 @@ def generate_enrollments(session, student_user_ids, course_ids, fixed_ids=None):
         )
         session.add(enroll)
         enrollments.append((student1_id, course_id))
-        enroll_id += 1
 
     # --- student2: ưu tiên học các môn của lecturer2 ---
     s2_courses = choose_courses(courses_l2, other_courses, min_n=4, max_n=6)
@@ -606,7 +608,6 @@ def generate_enrollments(session, student_user_ids, course_ids, fixed_ids=None):
         semester_str = course_by_id[course_id].semester
         enrolled_at = enrolled_at_from_semester(semester_str)
         enroll = Enroll(
-            enroll_id=enroll_id,
             course_id=course_id,
             student_id=student2_id,
             semester=semester_str,
@@ -615,7 +616,6 @@ def generate_enrollments(session, student_user_ids, course_ids, fixed_ids=None):
         )
         session.add(enroll)
         enrollments.append((student2_id, course_id))
-        enroll_id += 1
 
     # --- Các student còn lại: random như cũ ---
     other_students = [sid for sid in student_user_ids if sid not in (student1_id, student2_id)]
@@ -629,7 +629,6 @@ def generate_enrollments(session, student_user_ids, course_ids, fixed_ids=None):
             semester_str = course_by_id[course_id].semester
             enrolled_at = enrolled_at_from_semester(semester_str)
             enroll = Enroll(
-                enroll_id=enroll_id,
                 course_id=course_id,
                 student_id=student_id,
                 semester=semester_str,
@@ -638,11 +637,11 @@ def generate_enrollments(session, student_user_ids, course_ids, fixed_ids=None):
             )
             session.add(enroll)
             enrollments.append((student_id, course_id))
-            enroll_id += 1
 
     session.commit()
-    print(f"Created {enroll_id - 1} enrollments (with fixed-user scenario)")
+    print(f"Created {len(enrollments)} enrollments (with fixed-user scenario)")
     return enrollments
+
 
 
 # add status field to Assignment model before using this function
