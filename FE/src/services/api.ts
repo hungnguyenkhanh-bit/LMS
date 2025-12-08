@@ -48,6 +48,9 @@ export const authAPI = {
 // ============ Student API ============
 export const studentAPI = {
   getProfile: (userId: number) => api.get(`/students/${userId}/profile`),
+
+  getGPAHistory: (studentId: number) =>
+    api.get(`/students/${studentId}/gpa-history`),
   
   getDashboard: (userId: number) => api.get(`/students/${userId}/dashboard`),
   

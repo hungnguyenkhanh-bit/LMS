@@ -42,20 +42,34 @@ interface Course {
   lecturer_name: string | null;
 }
 
-const gpaData = [
-  { semester: "221", semesterGPA: 2.6, overallGPA: 2.8 },
-  { semester: "222", semesterGPA: 3.0, overallGPA: 3.0 },
-  { semester: "223", semesterGPA: 3.1, overallGPA: 3.1 },
-  { semester: "231", semesterGPA: 3.2, overallGPA: 3.2 },
-  { semester: "232", semesterGPA: 3.3, overallGPA: 3.3 },
-  { semester: "233", semesterGPA: 3.7, overallGPA: 3.4 },
-];
+interface GPADataPoint {
+  semester: string;      // label trên trục X, ví dụ "231"
+  semesterGPA: number;
+  overallGPA: number;
+}
+
+// const gpaData = [
+//   { semester: "211", semesterGPA: 3.8, overallGPA: 3.6 },
+//   { semester: "212", semesterGPA: 3.8, overallGPA: 3.6 },
+//   { semester: "213", semesterGPA: 3.8, overallGPA: 3.6 },
+//   { semester: "221", semesterGPA: 0.0, overallGPA: 2.8 },
+//   { semester: "222", semesterGPA: 3.0, overallGPA: 3.0 },
+//   { semester: "223", semesterGPA: 3.1, overallGPA: 3.1 },
+//   { semester: "231", semesterGPA: 3.2, overallGPA: 3.2 },
+//   { semester: "232", semesterGPA: 3.3, overallGPA: 3.3 },
+//   { semester: "233", semesterGPA: 3.7, overallGPA: 3.4 },
+//   { semester: "241", semesterGPA: 3.8, overallGPA: 3.6 },
+//   { semester: "242", semesterGPA: 3.8, overallGPA: 3.7 },
+//   { semester: "243", semesterGPA: 3.8, overallGPA: 3.8 },
+//   { semester: "251", semesterGPA: 3.8, overallGPA: 4.0 },
+// ];
 
 const StudentDashboardPage: React.FC = () => {
   const { user } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [gpaData, setGpaData] = useState<GPADataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [targetGpa, setTargetGpa] = useState<string>("");
@@ -64,20 +78,47 @@ const StudentDashboardPage: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       if (!user?.user_id) return;
-      
+
       try {
         setLoading(true);
-        const [dashboardRes, assignmentsRes, coursesRes] = await Promise.all([
-          studentAPI.getDashboard(user.user_id),
-          studentAPI.getAssignments(user.user_id),
-          studentAPI.getCourses(user.user_id)
-        ]);
+        const [dashboardRes, assignmentsRes, coursesRes, gpaHistoryRes] =
+          await Promise.all([
+            studentAPI.getDashboard(user.user_id),
+            studentAPI.getAssignments(user.user_id),
+            studentAPI.getCourses(user.user_id),
+            studentAPI.getGPAHistory(user.user_id),
+          ]);
+
         setStats(dashboardRes.data);
         setAssignments(assignmentsRes.data || []);
         setCourses(coursesRes.data || []);
-        // Set initial target GPA value
+
         if (dashboardRes.data?.target_gpa) {
           setTargetGpa(dashboardRes.data.target_gpa.toString());
+        }
+
+        // ---- map GPA history -> data cho chart ----
+        const history = gpaHistoryRes.data as {
+          entrance_year: number;
+          points: { semester: string; semester_gpa: number; overall_gpa: number }[];
+        };
+
+        if (history && history.points?.length) {
+          const mapped: GPADataPoint[] = history.points.map((p) => {
+            // chuyển "2023-1" -> "231" cho đẹp, hoặc thích thì giữ nguyên "2023-1"
+            const [yearStr, termStr] = p.semester.split("-");
+            const shortLabel =
+              yearStr && termStr ? yearStr.slice(-2) + termStr : p.semester;
+
+            return {
+              semester: shortLabel,
+              semesterGPA: Number(p.semester_gpa.toFixed(2)),
+              overallGPA: Number(p.overall_gpa.toFixed(2)),
+            };
+          });
+          setGpaData(mapped);
+        } else {
+          setGpaData([]);
         }
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
@@ -88,6 +129,7 @@ const StudentDashboardPage: React.FC = () => {
 
     fetchData();
   }, [user?.user_id]);
+
 
   const handleSetGoal = async () => {
     if (!user?.user_id) return;
@@ -122,6 +164,16 @@ const StudentDashboardPage: React.FC = () => {
       return parts[0][0];
     }
     return name[0];
+  };
+
+  const getEntranceYear = (studentId?: number | null) => {
+    if (!studentId) return null;
+    const idStr = studentId.toString();
+    if (idStr.length < 2) return null;
+    const yearDigits = idStr.slice(0, 2);
+    const parsed = parseInt(yearDigits, 10);
+    if (Number.isNaN(parsed)) return null;
+    return 2000 + parsed;
   };
 
   // Get status for deadline
@@ -177,7 +229,7 @@ const StudentDashboardPage: React.FC = () => {
               <h2 style={{ fontSize: "24px", marginBottom: "8px" }}>
                 {user?.full_name || "Student Name"}
               </h2>
-              <p className="small-caption">Entrance Year: 2022</p>
+              <p className="small-caption">Entrance Year: {getEntranceYear(user?.student_id) || "N/A"}</p>
               <p className="small-caption">Student ID: {user?.student_id || "N/A"}</p>
               <p className="small-caption">Major: {user?.major || "N/A"}</p>
               <p className="small-caption">Current GPA: {stats?.current_gpa?.toFixed(2) || user?.current_gpa?.toFixed(2) || "N/A"}</p>

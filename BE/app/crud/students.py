@@ -5,7 +5,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app import models, schemas
-
+import json
 
 def _full_name(student: models.Student) -> str:
     return " ".join(filter(None, [student.fname, student.lname, student.mname]))
@@ -135,6 +135,44 @@ def get_student_courses(db: Session, student_id: int) -> List[schemas.CourseSumm
     
     return result
 
+
+def get_gpa_history(db: Session, student_user_id: int) -> schemas.GPAHistoryResponse | None:
+    # student_user_id chính là user_id của student (đang dùng ở các API khác)
+    student = (
+        db.query(models.Student)
+        .filter(models.Student.user_id == student_user_id)
+        .first()
+    )
+    if not student or not student.gpa_history:
+        return None
+
+    # gpa_history có thể đang là dict hoặc string JSON
+    raw = student.gpa_history
+    if isinstance(raw, str):
+        raw = json.loads(raw)
+
+    entrance_year = raw.get("entrance_year")
+    semesters = raw.get("semesters", [])
+
+    points: list[schemas.GPAHistoryPoint] = []
+    total = 0.0
+    for idx, item in enumerate(semesters):
+        gpa = float(item.get("gpa", 0.0))
+        total += gpa
+        overall = total / (idx + 1)
+
+        points.append(
+            schemas.GPAHistoryPoint(
+                semester=item.get("semester", ""),
+                semester_gpa=round(gpa, 2),
+                overall_gpa=round(overall, 2),
+            )
+        )
+
+    return schemas.GPAHistoryResponse(
+        entrance_year=entrance_year,
+        points=points,
+    )
 
 def get_student_assignments(db: Session, student_id: int) -> List[schemas.AssignmentWithStatus]:
     """Get all assignments for courses the student is enrolled in"""

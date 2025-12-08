@@ -56,6 +56,8 @@ class Student(Base):
     course_ratings = relationship("CourseRating", back_populates="student")
     attendance_details = relationship("AttendanceDetail", back_populates="student")
 
+    gpa_history = Column(Text, nullable=True)
+
 
 class Lecturer(Base):
     __tablename__ = "lecturer"

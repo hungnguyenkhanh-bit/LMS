@@ -10,6 +10,15 @@ from app.database import get_db
 
 router = APIRouter(prefix="/students", tags=["students"])
 
+@router.get("/{student_id}/gpa-history", response_model=schemas.GPAHistoryResponse)
+def get_student_gpa_history(
+    student_id: int,
+    db: Session = Depends(get_db),
+):
+    history = student_crud.get_gpa_history(db, student_id)
+    if not history:
+        raise HTTPException(status_code=404, detail="GPA history not found")
+    return history
 
 @router.get("", response_model=List[schemas.StudentListItem])
 def get_all_students(

@@ -15,6 +15,7 @@ from pathlib import Path
 import csv
 import calendar
 import unicodedata
+import json
 
 faker = Faker("vi_VN")  # Vietnamese name for random user generation
 
@@ -47,8 +48,8 @@ DEFAULT_PASSWORD = hash_password("password123")
 
 # Sample data
 STUDENT_DATA = [
-    {"lname": "Nguyen", "mname": "Van", "fname": "An", "major": "Computer Science", "dob": date(2002, 5, 15), "gpa": 3.45},
-    {"lname": "Tran", "mname": "Thi", "fname": "Binh", "major": "Information Technology", "dob": date(2001, 8, 20), "gpa": 3.72},
+    {"lname": "Nguyễn", "mname": "Văn", "fname": "An", "major": "Computer Science", "dob": date(2005, 5, 15), "gpa": 3.45},
+    {"lname": "Trần", "mname": "Thị", "fname": "Bình", "major": "Information Technology", "dob": date(2004, 8, 20), "gpa": 3.72},
     {"lname": "Le", "mname": "Hoang", "fname": "Cuong", "major": "Computer Science", "dob": date(2002, 3, 10), "gpa": 3.15},
     {"lname": "Pham", "mname": "Minh", "fname": "Dung", "major": "Software Engineering", "dob": date(2001, 11, 5), "gpa": 3.88},
     {"lname": "Hoang", "mname": "Thi", "fname": "Em", "major": "Data Science", "dob": date(2002, 7, 25), "gpa": 3.55},
@@ -60,8 +61,8 @@ STUDENT_DATA = [
 ]
 
 LECTURER_DATA = [
-    {"title": "Dr.", "lname": "Nguyen", "mname": "Quang", "fname": "Hieu", "department": "Computer Science"},
-    {"title": "Prof.", "lname": "Tran", "mname": "Thi", "fname": "Mai", "department": "Information Technology"},
+    {"title": "Dr.", "lname": "Nguyễn", "mname": "Quang", "fname": "Hiếu", "department": "Computer Science"},
+    {"title": "Prof.", "lname": "Trần", "mname": "Thị", "fname": "Mai", "department": "Information Technology"},
     {"title": "Dr.", "lname": "Le", "mname": "Van", "fname": "Nam", "department": "Software Engineering"},
     {"title": "Assoc. Prof.", "lname": "Pham", "mname": "Hoang", "fname": "Oanh", "department": "Data Science"},
     {"title": "Dr.", "lname": "Hoang", "mname": "Minh", "fname": "Phuong", "department": "Artificial Intelligence"},
@@ -144,19 +145,80 @@ def clear_data(session):
     session.commit()
     print("Data cleared successfully!")
 
-def create_student_id() -> int:
-    enroll_year = faker.random_element(elements=(2020, 2021, 2022, 2023, 2024, 2025))
-    id_prefix = f"{enroll_year % 100}5"          # ví dụ: 205, 215, 225, ...
-    id_suffix = faker.numerify(text="####")      # ví dụ: 1234
-    student_id_str = f"{id_prefix}{id_suffix}"   # ví dụ: "2051234"
+def create_student_id_from_entrance_year(entrance_year: int) -> int:
+    """
+    Tạo MSSV từ năm nhập học.
+
+    Ví dụ:
+      entrance_year = 2023 -> prefix = '23' + '5' = '235' -> MSSV: 235xxxx
+    """
+    year_suffix = entrance_year % 100          # 2023 -> 23
+    id_prefix = f"{year_suffix}5"              # '235'
+    id_suffix = faker.numerify(text="####")    # '1234'
+    student_id_str = f"{id_prefix}{id_suffix}" # '2351234'
     return int(student_id_str)
 
-def generate_unique_student_id(used_ids: set[int]) -> int:
+def enumerate_semesters(entrance_year: int, last_year: int = 2025, last_term: int = 1) -> list[str]:
+    """
+    Sinh danh sách học kỳ từ entrance_year-1 đến last_year-last_term.
+    Giả định 1 năm có 3 kỳ: 1, 2, 3 (YYYY-1/2/3).
+
+    VD: entrance_year = 2022, last_year=2025, last_term=1
+      -> ['2022-1', '2022-2', '2022-3', '2023-1', ..., '2025-1']
+    """
+    semesters: list[str] = []
+
+    if entrance_year > last_year:
+        return semesters
+
+    for year in range(entrance_year, last_year + 1):
+        for term in (1, 2, 3):
+            if year == last_year and term > last_term:
+                break
+            semesters.append(f"{year}-{term}")
+
+    return semesters
+
+
+def _generate_gpa_series(num_semesters: int, current_gpa: float, target_gpa: float) -> list[float]:
+    """
+    Sinh list GPA cho num_semesters kỳ:
+      - GPA dao động nhẹ quanh target/current
+      - Xu hướng tăng hoặc ổn định dần về current_gpa
+    """
+    if num_semesters <= 0:
+        return []
+
+    # GPA bắt đầu hơi thấp hơn hiện tại một chút
+    g = max(1.0, min(3.5, current_gpa - random.uniform(0.3, 0.8)))
+    series: list[float] = []
+
+    for i in range(num_semesters):
+        progress = (i + 1) / num_semesters  # 0..1
+
+        # đầu giai đoạn kéo về target, cuối giai đoạn kéo về current
+        desired = target_gpa if progress < 0.5 else current_gpa
+
+        drift = (desired - g) * 0.35          # lực kéo về desired
+        noise = random.uniform(-0.25, 0.25)   # nhiễu nhỏ
+
+        g = g + drift + noise
+        g = max(1.0, min(4.0, g))            # clamp trong [1, 4]
+
+        series.append(round(g, 2))
+
+    return series
+
+def generate_unique_student_id(used_ids: set[int], entrance_year: int) -> int:
+    """
+    Sinh MSSV unique cho một entrance_year nhất định.
+    """
     while True:
-        sid = create_student_id()
+        sid = create_student_id_from_entrance_year(entrance_year)
         if sid not in used_ids:
             used_ids.add(sid)
             return sid
+
 
 
 def _sanitize_email_local(local_part: str) -> str:
@@ -191,12 +253,16 @@ def generate_users(session):
     
     # ========= 1) 2 STUDENT CỐ ĐỊNH =========
     for i, data in enumerate(FIXED_STUDENTS):
-        # MSSV unique, giống Populate_data.py
-        student_id = generate_unique_student_id(used_student_ids)
+        dob: date = data["dob"]
+        # Giả định vào đại học năm 18 tuổi
+        entrance_year = dob.year + 18
+
+        # MSSV unique theo entrance_year
+        student_id = generate_unique_student_id(used_student_ids, entrance_year)
+
         email_local = f"{data['fname']}.{data['lname']}{student_id}"
         email = generate_unique_email(email_local, "student.university.edu", used_emails)
         
-        # username: student1, student2
         user = User(
             user_id=user_id_counter,
             username=f"student{i+1}",
@@ -214,7 +280,7 @@ def generate_users(session):
             mname=data["mname"],
             fname=data["fname"],
             major=data["major"],
-            dob=data["dob"],
+            dob=dob,
             current_gpa=Decimal(str(data["gpa"])),
             target_gpa=Decimal("3.50"),
         )
@@ -222,6 +288,7 @@ def generate_users(session):
         student_user_ids.append(user_id_counter)
         
         user_id_counter += 1
+
     
     # ========= 2) STUDENT RANDOM BẰNG FAKER =========
     num_random_students = max(0, NUM_STUDENTS_TOTAL - len(FIXED_STUDENTS))
@@ -244,8 +311,11 @@ def generate_users(session):
         dob = faker.date_of_birth(minimum_age=18, maximum_age=22)
         gpa = round(random.uniform(2.0, 4.0), 2)
         
-        # MSSV unique
-        student_id = generate_unique_student_id(used_student_ids)
+        ## Năm nhập học = năm sinh + 18
+        entrance_year = dob.year + 18
+
+        # MSSV unique theo entrance_year
+        student_id = generate_unique_student_id(used_student_ids, entrance_year)
         email_local = f"{fname}.{lname}{student_id}"
         email = generate_unique_email(email_local, "student.university.edu", used_emails)
         
@@ -377,6 +447,100 @@ def generate_users(session):
     
     return student_user_ids, lecturer_user_ids, manager_user_id
 
+def generate_student_gpa_history(session, student_user_ids, last_year: int = 2025, last_term: int = 1):
+    """
+    Sinh lịch sử GPA theo từng kỳ cho các student và lưu vào
+    cột gpa_history của bảng Student.
+
+    Format JSON lưu trong student.gpa_history:
+
+    {
+      "entrance_year": 2022,
+      "semesters": [
+        {"semester": "2022-1", "gpa": 3.2, "overall_gpa": 3.2},
+        {"semester": "2022-2", "gpa": 3.0, "overall_gpa": 3.1},
+        ...
+      ]
+    }
+    """
+    print("Generating GPA history (Student.gpa_history)...")
+
+    # Lấy các Student object tương ứng danh sách user_id
+    students = (
+        session.query(Student)
+        .filter(Student.user_id.in_(student_user_ids))
+        .all()
+    )
+
+    if not students:
+        print("Không tìm thấy student nào, bỏ qua generate_student_gpa_history.")
+        return
+
+    updated = 0
+
+    for stu in students:
+        if not stu.student_id:
+            continue
+
+        # 1) Năm nhập học từ MSSV (vd: 235xxxx -> 23 -> 2023)
+        entrance_year = entrance_year_from_student_id(stu.student_id)
+        if entrance_year is None:
+            entrance_year = 2022  # fallback an toàn
+
+        # 2) Danh sách các kỳ từ entrance_year -> last_year-last_term (vd 2025-1)
+        semesters = enumerate_semesters(entrance_year, last_year, last_term)
+        if not semesters:
+            continue
+
+        # 3) current_gpa & target_gpa làm mốc
+        try:
+            current_gpa_val = float(stu.current_gpa) if stu.current_gpa is not None else random.uniform(2.0, 3.5)
+        except Exception:
+            current_gpa_val = random.uniform(2.0, 3.5)
+
+        try:
+            target_gpa_val = float(stu.target_gpa) if stu.target_gpa is not None else current_gpa_val
+        except Exception:
+            target_gpa_val = current_gpa_val
+
+        # 4) Sinh dãy GPA cho từng kỳ (GPA của từng kỳ)
+        term_gpas = _generate_gpa_series(len(semesters), current_gpa_val, target_gpa_val)
+
+        # 5) Tính overall GPA tích luỹ cho từng kỳ
+        semester_entries = []
+        cum_sum = 0.0
+
+        for idx, (sem, g) in enumerate(zip(semesters, term_gpas), start=1):
+            cum_sum += g
+            overall = round(cum_sum / idx, 2)  # average từ kỳ 1 -> kỳ hiện tại
+
+            semester_entries.append(
+                {
+                    "semester": sem,
+                    "gpa": g,              # GPA của kỳ đó
+                    "overall_gpa": overall # GPA tích lũy tới kỳ đó
+                }
+            )
+
+        history = {
+            "entrance_year": entrance_year,
+            "semesters": semester_entries,
+        }
+
+        # 6) Lưu vào cột gpa_history của Student (TEXT → JSON string)
+        stu.gpa_history = json.dumps(history, ensure_ascii=False)
+
+        # 7) Cập nhật current_gpa = overall GPA mới nhất
+        if semester_entries:
+            last_overall = semester_entries[-1]["overall_gpa"]
+            stu.current_gpa = Decimal(str(last_overall))
+
+        updated += 1
+
+    session.commit()
+    print(f"Generated GPA history for {updated} students.")
+
+
 # Thư mục chứa file sample_data.py (tức là thư mục DB/)
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -428,6 +592,14 @@ def load_course_data_from_csv(path: Path | None = None):
 
     print(f"[load_course_data_from_csv] Đã load {len(courses)} môn từ '{path}'.")
     return courses
+
+def entrance_year_from_student_id(student_id: int) -> int:
+    s = str(student_id)
+    if len(s) < 3:
+        # fallback an toàn
+        return 2023
+    yy = int(s[:2])      # lấy 2 số đầu
+    return 2000 + yy     # giả định nằm trong thế kỷ 21
 
 def get_course_image_url(course_code: str) -> str:
     """
@@ -1641,6 +1813,8 @@ def main():
         
         # Generate data in order
         student_user_ids, lecturer_user_ids, manager_user_id = generate_users(session)
+
+        generate_student_gpa_history(session, student_user_ids, last_year=2025, last_term=1)
         fixed_ids = {
             "student1": student_user_ids[0],
             "student2": student_user_ids[1],
@@ -1663,8 +1837,8 @@ def main():
         print("Sample data generation completed successfully!")
         print("=" * 50)
         print("\nLogin credentials:")
-        print("  Students: student1 to student10")
-        print("  Lecturers: lecturer1 to lecturer5")
+        print("  Students: student1 to student1000")
+        print("  Lecturers: lecturer1 to lecturer50")
         print("  Manager: manager1")
         print("  Password for all: password123")
         

@@ -94,6 +94,15 @@ class DashboardStats(BaseModel):
     target_gpa: Optional[float] = None
     recommendations: Optional[str] = None
 
+# GPA history cho từng kỳ
+class GPAHistoryPoint(BaseModel):
+    semester: str          # "2022-1"
+    semester_gpa: float    # GPA của kỳ đó
+    overall_gpa: float     # GPA tích lũy tới kỳ đó
+
+class GPAHistoryResponse(BaseModel):
+    entrance_year: int
+    points: list[GPAHistoryPoint]
 
 # ============ Lecturer Schemas ============
 class LecturerProfile(BaseModel):

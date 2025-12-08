@@ -48,7 +48,8 @@ CREATE TABLE student (
     major       VARCHAR(100) NOT NULL,
     dob         DATE,
     current_gpa DECIMAL(3,2) NOT NULL DEFAULT 0.00,
-    target_gpa  DECIMAL(3,2)
+    target_gpa  DECIMAL(3,2),
+    gpa_history TEXT
 );
 
 CREATE TABLE lecturer (
@@ -278,5 +279,3 @@ CREATE INDEX idx_quiz_course ON quiz(course_id);
 CREATE INDEX idx_grade_student ON grade(student_id);
 CREATE INDEX idx_message_sender ON message(sender_id);
 CREATE INDEX idx_message_receiver ON message(receiver_id);
-
-SELECT * FROM "user";
