@@ -123,6 +123,7 @@ class LecturerListItem(BaseModel):
     full_name: str
     department: str
     email: Optional[EmailStr] = None
+    average_rating: Optional[float] = None
 
 
 class LecturerDashboardStats(BaseModel):
@@ -169,6 +170,7 @@ class CourseSummary(BaseModel):
     enrolled_count: Optional[int] = None
     description: Optional[str] = None
     image_url: Optional[str] = None
+    average_grade: Optional[float] = None
 
 
 class CourseCreate(BaseModel):
@@ -351,10 +353,15 @@ class QuizAttemptSummary(BaseModel):
 
     attempt_id: int
     quiz_id: int
-    quiz_title: str
-    started_at: datetime
+    quiz_title: Optional[str] = None
+    student_id: Optional[int] = None
+    student_name: Optional[str] = None
+    started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
     total_score: Optional[float] = None
+    max_score: Optional[float] = None
+    percentage: Optional[float] = None
+    duration_seconds: Optional[int] = None
     status: str
 
 
@@ -515,12 +522,29 @@ class EnrollmentWithStudent(Enrollment):
 
 
 # ============ Course Detail Schema ============
+class AnnouncementBase(BaseModel):
+    content: str
+
+
+class AnnouncementCreate(AnnouncementBase):
+    pass
+
+
+class Announcement(AnnouncementBase):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    announcement_id: int
+    course_id: int
+    created_at: datetime
+
+
 class CourseDetail(CourseSummary):
     materials: List[Material] = []
     assignments: List[Assignment] = []
     quizzes: List[QuizSummary] = []
     feedback: List[Feedback] = []
     students: List[StudentListItem] = []
+    announcements: List[Announcement] = []
 
 
 # ============ Prediction Schemas ============

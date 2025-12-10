@@ -161,3 +161,17 @@ def get_course_submissions(
     if role not in {"lecturer", "manager"}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
     return course_crud.get_course_submissions(db, course_id)
+
+
+@router.post("/{course_id}/announcements", response_model=schemas.Announcement, status_code=status.HTTP_201_CREATED)
+def create_announcement(
+    course_id: int,
+    payload: schemas.AnnouncementCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(auth_crud.get_current_active_user)
+):
+    """Create an announcement for a course (lecturer only)"""
+    role = (current_user.role or "").lower()
+    if role != "lecturer":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only lecturers can post announcements")
+    return course_crud.create_announcement(db, course_id, payload)

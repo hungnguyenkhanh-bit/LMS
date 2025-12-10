@@ -108,6 +108,20 @@ def get_quiz(
     return quiz
 
 
+@router.get("/{quiz_id}/attempts", response_model=List[schemas.QuizAttemptSummary])
+def get_quiz_attempts(
+    quiz_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(auth_crud.get_current_active_user)
+):
+    """Get all attempts for a quiz (lecturer only)"""
+    role = (current_user.role or "").lower()
+    if role not in {"lecturer", "manager"}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+    
+    return quiz_crud.get_quiz_all_attempts(db, quiz_id)
+
+
 @router.post("/{quiz_id}/questions", response_model=schemas.QuizQuestion, status_code=status.HTTP_201_CREATED)
 def add_question(
     quiz_id: int,

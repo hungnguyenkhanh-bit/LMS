@@ -72,6 +72,26 @@ export default function LecturerCoursePage() {
   const [addFile, setAddFile] = useState<File | null>(null);
   const [addSubmitting, setAddSubmitting] = useState(false);
   
+  // Quiz questions state
+  const [quizQuestions, setQuizQuestions] = useState<Array<{
+    question_text: string;
+    option_a: string;
+    option_b: string;
+    option_c: string;
+    option_d: string;
+    correct_option: string;
+    points: number;
+  }>>([]);
+  const [currentQuestion, setCurrentQuestion] = useState({
+    question_text: "",
+    option_a: "",
+    option_b: "",
+    option_c: "",
+    option_d: "",
+    correct_option: "A",
+    points: 10,
+  });
+  
   // Upload Material Modal State
   const [showMaterialModal, setShowMaterialModal] = useState(false);
   const [materialTitle, setMaterialTitle] = useState("");
@@ -90,6 +110,21 @@ export default function LecturerCoursePage() {
   // View Submission Modal State
   const [showViewModal, setShowViewModal] = useState(false);
   const [viewSubmission, setViewSubmission] = useState<Submission | null>(null);
+  
+  // Quiz Attempts Viewer State
+  const [showQuizAttemptsModal, setShowQuizAttemptsModal] = useState(false);
+  const [selectedQuizForAttempts, setSelectedQuizForAttempts] = useState<Quiz | null>(null);
+  const [quizAttempts, setQuizAttempts] = useState<Array<{
+    attempt_id: number;
+    student_id: number;
+    student_name: string;
+    started_at: string;
+    finished_at: string | null;
+    total_score: number;
+    max_score: number;
+    percentage: number;
+    duration_seconds: number;
+  }>>([]);
 
   useEffect(() => {
     const fetchCourseData = async () => {
@@ -132,13 +167,27 @@ export default function LecturerCoursePage() {
 
   const handlePostAnnouncement = async () => {
     if (!announcement.trim() || !courseId) return;
-    // Implementation would go here
-    alert("Announcement posted!");
-    setAnnouncement("");
+    try {
+      await courseAPI.postAnnouncement(parseInt(courseId), announcement);
+      alert("Announcement posted successfully!");
+      setAnnouncement("");
+      // Refresh course data to get updated announcements
+      const courseRes = await courseAPI.getCourseDetail(parseInt(courseId));
+      setCourse(courseRes.data);
+    } catch (error) {
+      console.error("Failed to post announcement", error);
+      alert("Failed to post announcement. Please try again.");
+    }
   };
   
   const handleAddAssignmentQuiz = async () => {
     if (!addTitle.trim() || !courseId) return;
+    
+    // For quizzes, require at least one question
+    if (addType === "quiz" && quizQuestions.length === 0) {
+      alert("Please add at least one question to the quiz.");
+      return;
+    }
     
     setAddSubmitting(true);
     try {
@@ -150,7 +199,8 @@ export default function LecturerCoursePage() {
           max_score: parseFloat(addMaxScore) || 100,
         });
       } else {
-        await quizAPI.create({
+        // Create quiz
+        const quizRes = await quizAPI.create({
           course_id: parseInt(courseId),
           title: addTitle,
           description: addDescription || undefined,
@@ -158,6 +208,12 @@ export default function LecturerCoursePage() {
           max_attempts: parseInt(addMaxAttempts) || 1,
           end_time: addDeadline || undefined,
         });
+        
+        // Add questions to the quiz
+        const quizId = quizRes.data.id;
+        for (const question of quizQuestions) {
+          await quizAPI.addQuestion(quizId, question);
+        }
       }
       
       // Refresh course data
@@ -173,6 +229,16 @@ export default function LecturerCoursePage() {
       setAddDuration("30");
       setAddMaxAttempts("1");
       setAddFile(null);
+      setQuizQuestions([]);
+      setCurrentQuestion({
+        question_text: "",
+        option_a: "",
+        option_b: "",
+        option_c: "",
+        option_d: "",
+        correct_option: "A",
+        points: 10,
+      });
       
       alert(`${addType === "assignment" ? "Assignment" : "Quiz"} created successfully!`);
     } catch (err) {
@@ -181,6 +247,28 @@ export default function LecturerCoursePage() {
     } finally {
       setAddSubmitting(false);
     }
+  };
+  
+  const handleAddQuestionToList = () => {
+    if (!currentQuestion.question_text.trim() || !currentQuestion.option_a.trim() || !currentQuestion.option_b.trim()) {
+      alert("Please fill in at least the question text and options A and B.");
+      return;
+    }
+    
+    setQuizQuestions([...quizQuestions, currentQuestion]);
+    setCurrentQuestion({
+      question_text: "",
+      option_a: "",
+      option_b: "",
+      option_c: "",
+      option_d: "",
+      correct_option: "A",
+      points: 10,
+    });
+  };
+  
+  const handleRemoveQuestion = (index: number) => {
+    setQuizQuestions(quizQuestions.filter((_, i) => i !== index));
   };
   
   const handleUploadMaterial = async () => {
@@ -258,6 +346,28 @@ export default function LecturerCoursePage() {
     setViewSubmission(submission);
     setShowViewModal(true);
   };
+  
+  const handleViewQuizAttempts = async (quiz: Quiz) => {
+    setSelectedQuizForAttempts(quiz);
+    try {
+      console.log('Fetching attempts for quiz ID:', quiz.id);
+      const res = await quizAPI.getQuizAttempts(quiz.id);
+      console.log('Quiz attempts response:', res);
+      console.log('Quiz attempts data:', res.data);
+      setQuizAttempts(res.data || []);
+      setShowQuizAttemptsModal(true);
+    } catch (err: any) {
+      console.error("Failed to load quiz attempts", err);
+      console.error("Error response:", err.response);
+      alert(`Failed to load quiz attempts: ${err.response?.data?.detail || err.message}`);
+    }
+  };
+  
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}m ${secs}s`;
+  };
 
   if (loading) {
     return (
@@ -274,9 +384,6 @@ export default function LecturerCoursePage() {
       <div className="app-main">
         <div className="app-main-inner">
           <p>Course not found.</p>
-          <button className="btn btn-secondary" onClick={() => navigate("/lecturer-dashboard")}>
-            ← Back to Dashboard
-          </button>
         </div>
       </div>
     );
@@ -454,6 +561,40 @@ export default function LecturerCoursePage() {
               )}
             </tbody>
           </table>
+        </section>
+
+        {/* Quiz Grades & Attempts Viewer */}
+        <section className="card mt-24">
+          <div className="card-header">
+            <h2>Quiz Grades &amp; Attempts</h2>
+          </div>
+          <div className="mt-16">
+            {(!course.quizzes || course.quizzes.length === 0) ? (
+              <p className="small-caption">No quizzes available.</p>
+            ) : (
+              <div>
+                <div className="form-group">
+                  <label className="form-label">Select Quiz</label>
+                  <select 
+                    className="form-control"
+                    onChange={(e) => {
+                      const quizId = parseInt(e.target.value);
+                      const quiz = course.quizzes?.find(q => q.id === quizId);
+                      if (quiz) handleViewQuizAttempts(quiz);
+                    }}
+                    defaultValue=""
+                  >
+                    <option value="">-- Select a quiz --</option>
+                    {course.quizzes.map((quiz) => (
+                      <option key={quiz.id} value={quiz.id}>
+                        {quiz.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
         </section>
 
         {/* Announcements */}
@@ -634,6 +775,120 @@ export default function LecturerCoursePage() {
                         value={addDeadline}
                         onChange={(e) => setAddDeadline(e.target.value)}
                       />
+                    </div>
+                    
+                    {/* Questions Section */}
+                    <div className="mb-16" style={{ borderTop: "2px solid #e5e7eb", paddingTop: "16px" }}>
+                      <h3 style={{ marginBottom: "12px", fontSize: "16px" }}>Questions ({quizQuestions.length})</h3>
+                      
+                      {/* Added Questions List */}
+                      {quizQuestions.length > 0 && (
+                        <div style={{ marginBottom: "16px", maxHeight: "200px", overflowY: "auto" }}>
+                          {quizQuestions.map((q, index) => (
+                            <div key={index} className="card card--flat" style={{ background: "#f0f9ff", marginBottom: "8px", padding: "8px" }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                                <div style={{ flex: 1 }}>
+                                  <strong style={{ fontSize: "13px" }}>Q{index + 1}: {q.question_text}</strong>
+                                  <div className="small-caption" style={{ marginTop: "4px" }}>
+                                    Correct: {q.correct_option} | Points: {q.points}
+                                  </div>
+                                </div>
+                                <button 
+                                  className="btn btn-secondary" 
+                                  style={{ padding: "2px 8px", fontSize: "11px" }}
+                                  onClick={() => handleRemoveQuestion(index)}
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {/* Add New Question Form */}
+                      <div className="card card--flat" style={{ background: "#fef3c7", padding: "12px" }}>
+                        <label className="form-label" style={{ fontSize: "13px", fontWeight: 600 }}>Add Question</label>
+                        
+                        <input 
+                          type="text" 
+                          className="form-control" 
+                          placeholder="Question text"
+                          value={currentQuestion.question_text}
+                          onChange={(e) => setCurrentQuestion({...currentQuestion, question_text: e.target.value})}
+                          style={{ marginBottom: "8px" }}
+                        />
+                        
+                        <input 
+                          type="text" 
+                          className="form-control" 
+                          placeholder="Option A"
+                          value={currentQuestion.option_a}
+                          onChange={(e) => setCurrentQuestion({...currentQuestion, option_a: e.target.value})}
+                          style={{ marginBottom: "8px" }}
+                        />
+                        
+                        <input 
+                          type="text" 
+                          className="form-control" 
+                          placeholder="Option B"
+                          value={currentQuestion.option_b}
+                          onChange={(e) => setCurrentQuestion({...currentQuestion, option_b: e.target.value})}
+                          style={{ marginBottom: "8px" }}
+                        />
+                        
+                        <input 
+                          type="text" 
+                          className="form-control" 
+                          placeholder="Option C (optional)"
+                          value={currentQuestion.option_c}
+                          onChange={(e) => setCurrentQuestion({...currentQuestion, option_c: e.target.value})}
+                          style={{ marginBottom: "8px" }}
+                        />
+                        
+                        <input 
+                          type="text" 
+                          className="form-control" 
+                          placeholder="Option D (optional)"
+                          value={currentQuestion.option_d}
+                          onChange={(e) => setCurrentQuestion({...currentQuestion, option_d: e.target.value})}
+                          style={{ marginBottom: "8px" }}
+                        />
+                        
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "8px" }}>
+                          <div>
+                            <label className="form-label" style={{ fontSize: "11px" }}>Correct Answer</label>
+                            <select 
+                              className="form-control"
+                              value={currentQuestion.correct_option}
+                              onChange={(e) => setCurrentQuestion({...currentQuestion, correct_option: e.target.value})}
+                            >
+                              <option value="A">A</option>
+                              <option value="B">B</option>
+                              <option value="C">C</option>
+                              <option value="D">D</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="form-label" style={{ fontSize: "11px" }}>Points</label>
+                            <input 
+                              type="number" 
+                              className="form-control"
+                              value={currentQuestion.points}
+                              onChange={(e) => setCurrentQuestion({...currentQuestion, points: parseInt(e.target.value) || 10})}
+                              min="1"
+                            />
+                          </div>
+                        </div>
+                        
+                        <button 
+                          className="btn btn-secondary" 
+                          style={{ width: "100%", padding: "6px" }}
+                          onClick={handleAddQuestionToList}
+                        >
+                          + Add Question to List
+                        </button>
+                      </div>
                     </div>
                   </>
                 )}
@@ -905,6 +1160,76 @@ export default function LecturerCoursePage() {
                     {viewSubmission.score !== null ? "Regrade" : "Grade"}
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Quiz Attempts Modal */}
+        {showQuizAttemptsModal && selectedQuizForAttempts && (
+          <div className="modal-overlay" style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000
+          }}>
+            <div className="modal-content card" style={{ width: "900px", maxHeight: "90vh", overflow: "auto" }}>
+              <div className="card-header">
+                <h2>Quiz Attempts: {selectedQuizForAttempts.title}</h2>
+                <button onClick={() => setShowQuizAttemptsModal(false)} style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer" }}>×</button>
+              </div>
+              <div className="mt-16">
+                {quizAttempts.length === 0 ? (
+                  <p className="small-caption">No attempts yet.</p>
+                ) : (
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Student Name</th>
+                        <th>Student ID</th>
+                        <th>Submitted At</th>
+                        <th>Duration</th>
+                        <th>Score</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {quizAttempts.map((attempt) => (
+                        <tr key={attempt.attempt_id}>
+                          <td>{attempt.student_name}</td>
+                          <td>{attempt.student_id || "N/A"}</td>
+                          <td>{attempt.started_at ? new Date(attempt.started_at).toLocaleString() : "N/A"}</td>
+                          <td>{formatDuration(attempt.duration_seconds)}</td>
+                          <td>
+                            <strong>{attempt.total_score.toFixed(1)} / {attempt.max_score.toFixed(1)}</strong>
+                            <div className="small-caption">({attempt.percentage.toFixed(1)}%)</div>
+                          </td>
+                          <td>
+                            <button 
+                              className="btn btn-secondary" 
+                              style={{ padding: "4px 12px", fontSize: "12px" }}
+                              onClick={() => {
+                                setShowQuizAttemptsModal(false);
+                                navigate(`/quiz-review/${attempt.attempt_id}`);
+                              }}
+                            >
+                              View Details
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+                <button className="btn btn-secondary mt-16" onClick={() => setShowQuizAttemptsModal(false)}>
+                  Close
+                </button>
               </div>
             </div>
           </div>

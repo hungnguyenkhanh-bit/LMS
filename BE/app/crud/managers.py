@@ -63,11 +63,30 @@ def get_all_students(db: Session) -> List[schemas.StudentListItem]:
 
 
 def get_all_lecturers(db: Session) -> List[schemas.LecturerListItem]:
-    """Get all lecturers"""
+    """Get all lecturers with average ratings"""
     lecturers = db.query(models.Lecturer).all()
     result = []
     for lecturer in lecturers:
         user = lecturer.user
+        
+        # Calculate average rating from course feedback
+        courses = db.query(models.Course).filter(
+            models.Course.lecturer_id == lecturer.user_id
+        ).all()
+        
+        total_rating = 0.0
+        rating_count = 0
+        for course in courses:
+            feedback_list = db.query(models.Feedback).filter(
+                models.Feedback.course_id == course.course_id
+            ).all()
+            for feedback in feedback_list:
+                if feedback.rating:
+                    total_rating += feedback.rating
+                    rating_count += 1
+        
+        average_rating = round(total_rating / rating_count, 2) if rating_count > 0 else None
+        
         result.append(schemas.LecturerListItem(
             user_id=lecturer.user_id,
             title=lecturer.title,
@@ -78,13 +97,14 @@ def get_all_lecturers(db: Session) -> List[schemas.LecturerListItem]:
                 lecturer.mname
             ])),
             department=lecturer.department,
-            email=user.email if user else None
+            email=user.email if user else None,
+            average_rating=average_rating
         ))
     return result
 
 
 def get_all_courses(db: Session) -> List[schemas.CourseSummary]:
-    """Get all courses with details"""
+    """Get all courses with details including average grade"""
     courses = db.query(models.Course).order_by(models.Course.course_name.asc()).all()
     result = []
     
@@ -102,6 +122,34 @@ def get_all_courses(db: Session) -> List[schemas.CourseSummary]:
             models.Enroll.course_id == course.course_id
         ).count()
         
+        # Calculate average grade from Grade table for students enrolled in this course
+        # Get all students enrolled in this course
+        enrolled_students = db.query(models.Enroll.student_id).filter(
+            models.Enroll.course_id == course.course_id
+        ).all()
+        student_ids = [s.student_id for s in enrolled_students]
+        
+        if student_ids:
+            # Get grades for these students in this course
+            grades = db.query(models.Grade).filter(
+                models.Grade.student_id.in_(student_ids),
+                models.Grade.course_id == course.course_id,
+                models.Grade.score.isnot(None),
+                models.Grade.max_score.isnot(None)
+            ).all()
+            
+            total_percentage = 0.0
+            grade_count = 0
+            for grade_obj in grades:
+                # Convert to percentage
+                percentage = (float(grade_obj.score) / float(grade_obj.max_score)) * 100
+                total_percentage += percentage
+                grade_count += 1
+            
+            average_grade = round(total_percentage / grade_count, 2) if grade_count > 0 else None
+        else:
+            average_grade = None
+        
         result.append(schemas.CourseSummary(
             id=course.course_id,
             code=course.course_code,
@@ -111,7 +159,8 @@ def get_all_courses(db: Session) -> List[schemas.CourseSummary]:
             capacity=course.capacity,
             lecturer_name=lecturer_name,
             enrolled_count=enrolled_count,
-            description=course.description
+            description=course.description,
+            average_grade=average_grade
         ))
     
     return result

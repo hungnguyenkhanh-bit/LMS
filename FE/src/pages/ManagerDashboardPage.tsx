@@ -15,6 +15,7 @@ interface LecturerInfo {
   full_name: string;
   department: string;
   email: string | null;
+  average_rating?: number;
 }
 
 interface CourseInfo {
@@ -26,6 +27,7 @@ interface CourseInfo {
   capacity: number;
   lecturer_name: string | null;
   enrolled_count: number;
+  average_grade?: number;
 }
 
 interface GradeDistribution {
@@ -310,16 +312,17 @@ export default function ManagerDashboardPage() {
                   <th>Name</th>
                   <th>Department</th>
                   <th>Email</th>
+                  <th>Avg Rating</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={3}>Loading...</td>
+                    <td colSpan={4}>Loading...</td>
                   </tr>
                 ) : lecturers.length === 0 ? (
                   <tr>
-                    <td colSpan={3}>No faculty data available.</td>
+                    <td colSpan={4}>No faculty data available.</td>
                   </tr>
                 ) : (
                   lecturers.slice(0, 5).map((lecturer) => (
@@ -327,6 +330,11 @@ export default function ManagerDashboardPage() {
                       <td>{lecturer.full_name}</td>
                       <td>{lecturer.department}</td>
                       <td>{lecturer.email || "N/A"}</td>
+                      <td>
+                        {lecturer.average_rating !== undefined && lecturer.average_rating !== null 
+                          ? `⭐ ${lecturer.average_rating.toFixed(1)}/5` 
+                          : "N/A"}
+                      </td>
                     </tr>
                   ))
                 )}

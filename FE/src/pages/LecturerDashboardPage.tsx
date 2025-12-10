@@ -196,25 +196,31 @@ export default function LecturerDashboardPage() {
               <h2>Student Attendance Rate</h2>
             </div>
             <p className="small-caption mt-4">Attendance percentage per course</p>
-            <div className="mt-8">
+            <div className="mt-8" style={{ overflowX: "auto", overflowY: "hidden" }}>
               {attendanceStats.length === 0 ? (
                 <p className="small-caption">No attendance data available.</p>
               ) : (
-                <svg viewBox="0 0 380 230" role="img" aria-label="Attendance bar chart" style={{ width: "100%" }}>
+                <svg 
+                  viewBox={`0 0 ${Math.max(380, 60 + attendanceStats.length * 56)} 230`} 
+                  role="img" 
+                  aria-label="Attendance bar chart" 
+                  style={{ minWidth: "380px", width: "100%" }}
+                >
                   {[0, 25, 50, 75, 100].map((tick) => {
                     const yBase = 190;
                     const chartHeight = 140;
                     const y = yBase - (tick / maxAttendance) * chartHeight;
+                    const chartWidth = Math.max(340, attendanceStats.length * 56);
                     return (
                       <g key={tick}>
-                        <line x1="60" y1={y} x2="340" y2={y} stroke="#e5e7eb" strokeWidth="1" />
+                        <line x1="60" y1={y} x2={chartWidth} y2={y} stroke="#e5e7eb" strokeWidth="1" />
                         <text x="50" y={y + 4} textAnchor="end" className="small-caption" fill="#111827">{tick}%</text>
                       </g>
                     );
                   })}
                   <line x1="60" y1="50" x2="60" y2="190" stroke="#000" strokeWidth="1" />
-                  <line x1="60" y1="190" x2="340" y2="190" stroke="#000" strokeWidth="1" />
-                  {attendanceStats.slice(0, 5).map((stat, index) => {
+                  <line x1="60" y1="190" x2={Math.max(340, attendanceStats.length * 56)} y2="190" stroke="#000" strokeWidth="1" />
+                  {attendanceStats.map((stat, index) => {
                     const barWidth = 40;
                     const gap = 16;
                     const x = 70 + index * (barWidth + gap);
@@ -240,27 +246,44 @@ export default function LecturerDashboardPage() {
           <section className="card">
             <div className="card-header">
               <h2>Average Scores by Course</h2>
+              {/* Move legends to top right */}
+              <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                  <div style={{ width: "12px", height: "12px", background: "#3b82f6", borderRadius: "2px" }}></div>
+                  <span style={{ fontSize: "11px" }}>Quiz</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                  <div style={{ width: "12px", height: "12px", background: "#f59e0b", borderRadius: "2px" }}></div>
+                  <span style={{ fontSize: "11px" }}>Assignment</span>
+                </div>
+              </div>
             </div>
-            <p className="small-caption mt-4">Quiz (blue) and Assignment (orange) averages</p>
-            <div className="mt-8">
+            <p className="small-caption mt-4">Quiz and Assignment averages</p>
+            <div className="mt-8" style={{ overflowX: "auto", overflowY: "hidden" }}>
               {scoreStats.length === 0 ? (
                 <p className="small-caption">No score data available.</p>
               ) : (
-                <svg viewBox="0 0 380 230" role="img" aria-label="Score bar chart" style={{ width: "100%" }}>
+                <svg 
+                  viewBox={`0 0 ${Math.max(380, 60 + scoreStats.length * 80)} 230`} 
+                  role="img" 
+                  aria-label="Score bar chart" 
+                  style={{ minWidth: "380px", width: "100%" }}
+                >
                   {[0, 25, 50, 75, 100].map((tick) => {
                     const yBase = 190;
                     const chartHeight = 140;
                     const y = yBase - (tick / maxScore) * chartHeight;
+                    const chartWidth = Math.max(340, scoreStats.length * 80);
                     return (
                       <g key={tick}>
-                        <line x1="60" y1={y} x2="340" y2={y} stroke="#e5e7eb" strokeWidth="1" />
+                        <line x1="60" y1={y} x2={chartWidth} y2={y} stroke="#e5e7eb" strokeWidth="1" />
                         <text x="50" y={y + 4} textAnchor="end" className="small-caption" fill="#111827">{tick}%</text>
                       </g>
                     );
                   })}
                   <line x1="60" y1="50" x2="60" y2="190" stroke="#000" strokeWidth="1" />
-                  <line x1="60" y1="190" x2="340" y2="190" stroke="#000" strokeWidth="1" />
-                  {scoreStats.slice(0, 4).map((stat, index) => {
+                  <line x1="60" y1="190" x2={Math.max(340, scoreStats.length * 80)} y2="190" stroke="#000" strokeWidth="1" />
+                  {scoreStats.map((stat, index) => {
                     const groupWidth = 60;
                     const barWidth = 24;
                     const gap = 20;
@@ -281,10 +304,6 @@ export default function LecturerDashboardPage() {
                       </g>
                     );
                   })}
-                  <rect x="280" y="30" width="12" height="12" fill="#3b82f6" rx="2" />
-                  <text x="296" y="40" style={{ fontSize: "10px" }} fill="#111827">Quiz</text>
-                  <rect x="280" y="48" width="12" height="12" fill="#f59e0b" rx="2" />
-                  <text x="296" y="58" style={{ fontSize: "10px" }} fill="#111827">Assignment</text>
                 </svg>
               )}
             </div>

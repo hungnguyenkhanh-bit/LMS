@@ -220,6 +220,16 @@ def get_course_detail(db: Session, course_id: int) -> Optional[schemas.CourseDet
     
     enrolled_count = len(students)
     
+    # Get announcements
+    announcements = []
+    for ann in course.announcements:
+        announcements.append(schemas.Announcement(
+            announcement_id=ann.announcement_id,
+            course_id=ann.course_id,
+            content=ann.content,
+            created_at=ann.created_at
+        ))
+    
     return schemas.CourseDetail(
         id=course.course_id,
         code=course.course_code,
@@ -234,7 +244,8 @@ def get_course_detail(db: Session, course_id: int) -> Optional[schemas.CourseDet
         assignments=assignments,
         quizzes=quizzes,
         feedback=feedback,
-        students=students
+        students=students,
+        announcements=announcements
     )
 
 
@@ -594,4 +605,22 @@ def update_feedback(db: Session, feedback_id: int, student_id: int, payload: sch
         course_id=feedback.course_id,
         course_name=course_name,
         created_at=feedback.created_at
+    )
+
+
+def create_announcement(db: Session, course_id: int, payload: schemas.AnnouncementCreate) -> schemas.Announcement:
+    """Create a new announcement for a course"""
+    announcement = models.Announcement(
+        course_id=course_id,
+        content=payload.content
+    )
+    db.add(announcement)
+    db.commit()
+    db.refresh(announcement)
+    
+    return schemas.Announcement(
+        announcement_id=announcement.announcement_id,
+        course_id=announcement.course_id,
+        content=announcement.content,
+        created_at=announcement.created_at
     )

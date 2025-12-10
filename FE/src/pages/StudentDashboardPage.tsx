@@ -341,10 +341,15 @@ const StudentDashboardPage: React.FC = () => {
             </LineChart>
           </ResponsiveContainer>
         </div>
-
+        
+        {/* Goal controls below the chart */}
         <div
           className="mt-16"
           style={{
+            background: "#f9fafb",
+            padding: "12px 16px",
+            borderRadius: "8px",
+            border: "1px solid #e5e7eb",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
@@ -352,16 +357,18 @@ const StudentDashboardPage: React.FC = () => {
         >
           <div className="small-caption">
             Current Goal: <strong>{stats?.target_gpa?.toFixed(1) || "Not set"}</strong>
+          </div>
+          <div style={{ display: "flex", gap: "8px" }}>
             <button
               className="btn btn-secondary"
-              style={{ marginLeft: "8px" }}
+              style={{ padding: "6px 12px", fontSize: "12px" }}
               onClick={() => setShowGoalModal(true)}
             >
               Set goal
             </button>
             <button
               className="btn btn-primary"
-              style={{ marginLeft: "4px" }}
+              style={{ padding: "6px 12px", fontSize: "12px" }}
             >
               Get prediction
             </button>

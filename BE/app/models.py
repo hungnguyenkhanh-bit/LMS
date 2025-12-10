@@ -107,6 +107,7 @@ class Course(Base):
     grades = relationship("Grade", back_populates="course")
     course_ratings = relationship("CourseRating", back_populates="course")
     attendance_records = relationship("AttendanceRecord", back_populates="course")
+    announcements = relationship("Announcement", back_populates="course")
 
 
 class Enroll(Base):
@@ -365,3 +366,14 @@ class ActivityLog(Base):
     timestamp = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="activities")
+
+
+class Announcement(Base):
+    __tablename__ = "announcement"
+
+    announcement_id = Column(Integer, primary_key=True, index=True)
+    course_id = Column(Integer, ForeignKey("course.course_id", ondelete="CASCADE"), nullable=False)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    course = relationship("Course", back_populates="announcements")

@@ -338,13 +338,32 @@ def get_student_quiz_attempts(db: Session, student_id: int, quiz_id: Optional[in
     result = []
     for attempt in attempts:
         quiz = attempt.quiz
+        
+        # Calculate duration
+        duration_seconds = 0
+        if attempt.started_at and attempt.finished_at:
+            duration = attempt.finished_at - attempt.started_at
+            duration_seconds = int(duration.total_seconds())
+        
+        # Calculate max score from quiz questions
+        questions = db.query(models.QuizQuestion).filter(
+            models.QuizQuestion.quiz_id == attempt.quiz_id
+        ).all()
+        max_score = sum(float(q.points) if q.points else 1.0 for q in questions)
+        
+        total_score = float(attempt.total_score) if attempt.total_score else 0.0
+        percentage = (total_score / max_score * 100) if max_score > 0 else 0.0
+        
         result.append(schemas.QuizAttemptSummary(
             attempt_id=attempt.attempt_id,
             quiz_id=attempt.quiz_id,
             quiz_title=quiz.title if quiz else "Unknown Quiz",
             started_at=attempt.started_at,
             finished_at=attempt.finished_at,
-            total_score=float(attempt.total_score) if attempt.total_score else None,
+            total_score=total_score,
+            max_score=max_score,
+            percentage=round(percentage, 2),
+            duration_seconds=duration_seconds,
             status=attempt.status or "unknown"
         ))
     
@@ -420,3 +439,55 @@ def get_quiz_attempt_detail(db: Session, attempt_id: int) -> Optional[schemas.Qu
         finished_at=attempt.finished_at,
         answers=answers
     )
+
+
+def get_quiz_all_attempts(db: Session, quiz_id: int) -> List[schemas.QuizAttemptSummary]:
+    """Get all attempts for a specific quiz with student information"""
+    attempts = db.query(models.QuizAttempt).filter(
+        models.QuizAttempt.quiz_id == quiz_id
+    ).order_by(models.QuizAttempt.started_at.desc()).all()
+    
+    result = []
+    for attempt in attempts:
+        # Get student info using student_id from attempt
+        student = db.query(models.Student).filter(
+            models.Student.user_id == attempt.student_id
+        ).first()
+        
+        # Build student name from student record
+        student_name = "Unknown"
+        if student:
+            student_name = f"{student.lname} {student.mname or ''} {student.fname}".strip()
+        
+        # Calculate duration
+        duration_seconds = 0
+        if attempt.started_at and attempt.finished_at:
+            duration = attempt.finished_at - attempt.started_at
+            duration_seconds = int(duration.total_seconds())
+        
+        # Get quiz for max score
+        quiz = db.query(models.Quiz).filter(models.Quiz.quiz_id == quiz_id).first()
+        questions = db.query(models.QuizQuestion).filter(
+            models.QuizQuestion.quiz_id == quiz_id
+        ).all()
+        max_score = sum(float(q.points) if q.points else 1.0 for q in questions)
+        
+        total_score = float(attempt.total_score) if attempt.total_score else 0.0
+        percentage = (total_score / max_score * 100) if max_score > 0 else 0.0
+        
+        result.append(schemas.QuizAttemptSummary(
+            attempt_id=attempt.attempt_id,
+            quiz_id=attempt.quiz_id,
+            quiz_title=quiz.title if quiz else "Unknown Quiz",
+            student_id=student.student_id if student else None,
+            student_name=student_name,
+            started_at=attempt.started_at,
+            finished_at=attempt.finished_at,
+            total_score=total_score,
+            max_score=max_score,
+            percentage=round(percentage, 2),
+            duration_seconds=duration_seconds,
+            status=attempt.status or "in_progress"
+        ))
+    
+    return result

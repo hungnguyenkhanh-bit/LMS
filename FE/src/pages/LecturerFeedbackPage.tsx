@@ -84,7 +84,11 @@ export default function LecturerFeedbackPage() {
     setSelectedStudent(student);
     try {
       const res = await messageAPI.getMessages(student.user_id);
-      setMessages(res.data || []);
+      // Sort messages by created_at in ascending order (oldest first, newest at bottom)
+      const sortedMessages = (res.data || []).sort((a: Message, b: Message) => 
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+      setMessages(sortedMessages);
     } catch (err) {
       console.error("Failed to load conversation", err);
       setMessages([]);
@@ -99,9 +103,12 @@ export default function LecturerFeedbackPage() {
         content: messageText,
       });
       setMessageText("");
-      // Refresh conversation
+      // Refresh conversation - sort oldest to newest (bottom)
       const res = await messageAPI.getMessages(selectedStudent.user_id);
-      setMessages(res.data || []);
+      const sortedMessages = (res.data || []).sort((a: Message, b: Message) => 
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+      setMessages(sortedMessages);
     } catch (err) {
       console.error("Failed to send message", err);
       alert("Failed to send message.");

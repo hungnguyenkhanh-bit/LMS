@@ -204,6 +204,9 @@ export const courseAPI = {
   
   submitFeedback: (courseId: number, data: { comment?: string; rating: number }) =>
     api.post(`/courses/${courseId}/feedback`, { ...data, course_id: courseId }),
+  
+  postAnnouncement: (courseId: number, content: string) =>
+    api.post(`/courses/${courseId}/announcements`, { content }),
 };
 
 // ============ Quiz API ============
@@ -250,6 +253,8 @@ export const quizAPI = {
     const params = quizId ? `?quiz_id=${quizId}` : '';
     return api.get(`/quizzes/student/${studentId}/attempts${params}`);
   },
+  
+  getQuizAttempts: (quizId: number) => api.get(`/quizzes/${quizId}/attempts`),
 };
 
 // ============ Message API ============

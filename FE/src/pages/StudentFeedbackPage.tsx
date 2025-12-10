@@ -140,7 +140,11 @@ export default function StudentFeedbackPage() {
     setSelectedLecturer(lecturer);
     try {
       const res = await messageAPI.getMessages(lecturer.user_id);
-      setMessages(res.data || []);
+      // Sort messages by created_at in ascending order (oldest first, newest at bottom)
+      const sortedMessages = (res.data || []).sort((a: Message, b: Message) => 
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+      setMessages(sortedMessages);
     } catch (err) {
       console.error("Failed to load conversation", err);
       setMessages([]);
@@ -157,9 +161,12 @@ export default function StudentFeedbackPage() {
         content: messageText,
       });
       setMessageText("");
-      // Refresh messages
+      // Refresh messages - sort oldest to newest (bottom)
       const res = await messageAPI.getMessages(selectedLecturer.user_id);
-      setMessages(res.data || []);
+      const sortedMessages = (res.data || []).sort((a: Message, b: Message) => 
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+      setMessages(sortedMessages);
     } catch (err) {
       console.error("Failed to send message", err);
       alert("Failed to send message.");
@@ -314,100 +321,98 @@ export default function StudentFeedbackPage() {
           </div>
         </section>
 
-        {/* Direct messaging with professors - Chat UI */}
-        <section className="card mt-24">
-          <div className="card-header">
-            <h2>Direct Messaging with Professors</h2>
-          </div>
-          <div className="layout-chat mt-16">
-            {/* left: Professors list */}
-            <aside className="chat-sidebar">
-              <div className="chat-sidebar-header">
-                <input
-                  className="form-control"
-                  type="text"
-                  placeholder="Search professors..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-              <ul className="chat-list">
-                {filteredLecturers.length === 0 ? (
-                  <li className="chat-list-item">
-                    <span className="small-caption">No professors found.</span>
-                  </li>
-                ) : (
-                  filteredLecturers.map((lecturer) => (
-                    <li
-                      key={lecturer.user_id}
-                      className={`chat-list-item ${
-                        selectedLecturer?.user_id === lecturer.user_id
-                          ? "chat-list-item--active"
-                          : ""
-                      }`}
-                      onClick={() => handleSelectLecturer(lecturer)}
-                      style={{ cursor: "pointer" }}
-                    >
-                      <span>{lecturer.full_name}</span>
-                      <span className="small-caption" style={{ display: "block", fontSize: "11px" }}>
-                        {lecturer.department}
-                      </span>
-                    </li>
-                  ))
-                )}
-              </ul>
-            </aside>
-
-            {/* right: conversation */}
-            <div className="chat-main">
-              <div className="card-header" style={{ marginBottom: "12px" }}>
-                <h2>
-                  {selectedLecturer
-                    ? `Conversation with ${selectedLecturer.full_name}`
-                    : "Select a professor to start conversation"}
-                </h2>
-              </div>
-              <div className="chat-messages">
-                {!selectedLecturer ? (
-                  <p className="small-caption">Select a professor from the list.</p>
-                ) : messages.length === 0 ? (
-                  <p className="small-caption">No messages yet. Start the conversation!</p>
-                ) : (
-                  messages.map((msg) => (
-                    <div
-                      key={msg.id}
-                      className={`chat-bubble ${
-                        msg.sender_id === user?.user_id
-                          ? "chat-bubble--me"
-                          : "chat-bubble--other"
-                      }`}
-                    >
-                      {msg.content}
-                    </div>
-                  ))
-                )}
-              </div>
-              <div className="chat-input-row">
-                <input
-                  className="form-control"
-                  type="text"
-                  placeholder="Type your message here..."
-                  value={messageText}
-                  onChange={(e) => setMessageText(e.target.value)}
-                  onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
-                  disabled={!selectedLecturer}
-                />
-                <button
-                  className="btn btn-primary"
-                  onClick={handleSendMessage}
-                  disabled={!selectedLecturer}
-                >
-                  Send
-                </button>
-              </div>
+        {/* Direct messaging with professors - Split into 2 boxes like lecturer interface */}
+        <div className="grid grid-2 mt-24">
+          {/* Left box: Professors list with search */}
+          <section className="card">
+            <div className="card-header">
+              <h2>Direct Messaging with Professors</h2>
             </div>
-          </div>
-        </section>
+            <div className="mt-16">
+              <input
+                className="form-control"
+                type="text"
+                placeholder="Search professors..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <ul className="chat-list mt-12">
+              {filteredLecturers.length === 0 ? (
+                <li className="chat-list-item">
+                  <span className="small-caption">No professors found.</span>
+                </li>
+              ) : (
+                filteredLecturers.map((lecturer) => (
+                  <li
+                    key={lecturer.user_id}
+                    className={`chat-list-item ${
+                      selectedLecturer?.user_id === lecturer.user_id
+                        ? "chat-list-item--active"
+                        : ""
+                    }`}
+                    onClick={() => handleSelectLecturer(lecturer)}
+                    style={{ cursor: "pointer" }}
+                  >
+                    <span>{lecturer.full_name}</span>
+                    <span className="small-caption" style={{ display: "block", fontSize: "11px" }}>
+                      {lecturer.department}
+                    </span>
+                  </li>
+                ))
+              )}
+            </ul>
+          </section>
+
+          {/* Right box: Conversation */}
+          <section className="card">
+            <div className="card-header">
+              <h2>
+                {selectedLecturer
+                  ? `Conversation with ${selectedLecturer.full_name}`
+                  : "Select a professor"}
+              </h2>
+            </div>
+            <div className="chat-messages mt-16">
+              {!selectedLecturer ? (
+                <p className="small-caption">Select a professor from the list.</p>
+              ) : messages.length === 0 ? (
+                <p className="small-caption">No messages yet. Start the conversation!</p>
+              ) : (
+                messages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className={`chat-bubble ${
+                      msg.sender_id === user?.user_id
+                        ? "chat-bubble--me"
+                        : "chat-bubble--other"
+                    }`}
+                  >
+                    {msg.content}
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="chat-input-row mt-12">
+              <input
+                className="form-control"
+                type="text"
+                placeholder="Type your message here..."
+                value={messageText}
+                onChange={(e) => setMessageText(e.target.value)}
+                onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
+                disabled={!selectedLecturer}
+              />
+              <button
+                className="btn btn-primary"
+                onClick={handleSendMessage}
+                disabled={!selectedLecturer}
+              >
+                Send
+              </button>
+            </div>
+          </section>
+        </div>
 
       </div>
     </div>
