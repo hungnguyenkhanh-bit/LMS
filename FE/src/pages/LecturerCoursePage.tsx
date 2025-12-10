@@ -125,6 +125,10 @@ export default function LecturerCoursePage() {
     percentage: number;
     duration_seconds: number;
   }>>([]);
+  
+  // Quiz Attempt Detail Modal State
+  const [showAttemptDetailModal, setShowAttemptDetailModal] = useState(false);
+  const [attemptDetail, setAttemptDetail] = useState<any>(null);
 
   useEffect(() => {
     const fetchCourseData = async () => {
@@ -368,6 +372,17 @@ export default function LecturerCoursePage() {
     const secs = seconds % 60;
     return `${mins}m ${secs}s`;
   };
+  
+  const handleViewAttemptDetail = async (attemptId: number) => {
+    try {
+      const res = await quizAPI.getAttemptDetail(attemptId);
+      setAttemptDetail(res.data);
+      setShowAttemptDetailModal(true);
+    } catch (err: any) {
+      console.error("Failed to load attempt details", err);
+      alert("Failed to load attempt details");
+    }
+  };
 
   if (loading) {
     return (
@@ -392,12 +407,7 @@ export default function LecturerCoursePage() {
   return (
     <div className="app-main">
       <div className="app-main-inner">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h1 className="section-title">{course.name} ({course.code})</h1>
-          <button className="btn btn-secondary" onClick={() => navigate("/lecturer-dashboard")}>
-            ← Back to Dashboard
-          </button>
-        </div>
+        <h1 className="section-title">{course.name} ({course.code})</h1>
 
         <div className="grid grid-2 mt-24">
           {/* Assignments & Quizzes */}
@@ -1214,10 +1224,7 @@ export default function LecturerCoursePage() {
                             <button 
                               className="btn btn-secondary" 
                               style={{ padding: "4px 12px", fontSize: "12px" }}
-                              onClick={() => {
-                                setShowQuizAttemptsModal(false);
-                                navigate(`/quiz-review/${attempt.attempt_id}`);
-                              }}
+                              onClick={() => handleViewAttemptDetail(attempt.attempt_id)}
                             >
                               View Details
                             </button>
@@ -1228,6 +1235,117 @@ export default function LecturerCoursePage() {
                   </table>
                 )}
                 <button className="btn btn-secondary mt-16" onClick={() => setShowQuizAttemptsModal(false)}>
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Quiz Attempt Detail Modal */}
+        {showAttemptDetailModal && attemptDetail && (
+          <div className="modal-overlay" style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1001
+          }}>
+            <div className="modal-content card" style={{ width: "800px", maxHeight: "90vh", overflow: "auto" }}>
+              <div className="card-header">
+                <h2>Quiz Attempt Details</h2>
+                <button onClick={() => setShowAttemptDetailModal(false)} style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer" }}>×</button>
+              </div>
+              <div className="mt-16">
+                {/* Summary */}
+                <div style={{ background: "#f9fafb", padding: "16px", borderRadius: "8px", marginBottom: "24px" }}>
+                  <div className="grid grid-2" style={{ gap: "16px" }}>
+                    <div>
+                      <p className="small-caption">Quiz</p>
+                      <p><strong>{attemptDetail.quiz_title}</strong></p>
+                    </div>
+                    <div>
+                      <p className="small-caption">Score</p>
+                      <p><strong>{attemptDetail.total_score.toFixed(1)} / {attemptDetail.max_score.toFixed(1)} ({attemptDetail.percentage.toFixed(1)}%)</strong></p>
+                    </div>
+                    <div>
+                      <p className="small-caption">Correct Answers</p>
+                      <p><strong>{attemptDetail.correct_answers} / {attemptDetail.total_questions}</strong></p>
+                    </div>
+                    <div>
+                      <p className="small-caption">Status</p>
+                      <p><strong>{attemptDetail.status}</strong></p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Questions and Answers */}
+                <h3 style={{ marginBottom: "16px" }}>Questions & Answers</h3>
+                {attemptDetail.answers && attemptDetail.answers.map((answer: any, index: number) => (
+                  <div 
+                    key={answer.question_id} 
+                    style={{ 
+                      padding: "16px", 
+                      marginBottom: "16px", 
+                      borderRadius: "8px",
+                      border: answer.is_correct ? "2px solid #16a34a" : "2px solid #dc2626",
+                      background: answer.is_correct ? "#f0fdf4" : "#fef2f2"
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "12px", marginBottom: "12px" }}>
+                      <span style={{ 
+                        fontSize: "18px", 
+                        fontWeight: "bold",
+                        color: answer.is_correct ? "#16a34a" : "#dc2626"
+                      }}>
+                        {answer.is_correct ? "✓" : "✗"}
+                      </span>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ fontWeight: 600, marginBottom: "8px" }}>
+                          Question {index + 1}: {answer.question_text}
+                        </p>
+                        <div style={{ marginLeft: "8px" }}>
+                          <p style={{ marginBottom: "4px" }}>
+                            <span className={answer.chosen_option === 'A' ? (answer.is_correct ? 'text-success' : 'text-danger') : ''}>
+                              A. {answer.option_a} {answer.chosen_option === 'A' && '← Your answer'}
+                            </span>
+                          </p>
+                          <p style={{ marginBottom: "4px" }}>
+                            <span className={answer.chosen_option === 'B' ? (answer.is_correct ? 'text-success' : 'text-danger') : ''}>
+                              B. {answer.option_b} {answer.chosen_option === 'B' && '← Your answer'}
+                            </span>
+                          </p>
+                          {answer.option_c && (
+                            <p style={{ marginBottom: "4px" }}>
+                              <span className={answer.chosen_option === 'C' ? (answer.is_correct ? 'text-success' : 'text-danger') : ''}>
+                                C. {answer.option_c} {answer.chosen_option === 'C' && '← Your answer'}
+                              </span>
+                            </p>
+                          )}
+                          {answer.option_d && (
+                            <p style={{ marginBottom: "4px" }}>
+                              <span className={answer.chosen_option === 'D' ? (answer.is_correct ? 'text-success' : 'text-danger') : ''}>
+                                D. {answer.option_d} {answer.chosen_option === 'D' && '← Your answer'}
+                              </span>
+                            </p>
+                          )}
+                          {!answer.is_correct && (
+                            <p style={{ marginTop: "8px", color: "#16a34a", fontWeight: 500 }}>
+                              ✓ Correct answer: {answer.correct_option}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                
+                <button className="btn btn-secondary mt-16" onClick={() => setShowAttemptDetailModal(false)}>
                   Close
                 </button>
               </div>
