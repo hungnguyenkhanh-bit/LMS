@@ -1799,6 +1799,52 @@ def generate_materials(session, course_ids):
     print(f"Created {material_id - 1} course materials")
 
 
+def fix_sequences(session):
+    """Fix all database sequences to prevent ID conflicts"""
+    print("Fixing database sequences...")
+    
+    from sqlalchemy import text
+    
+    tables_and_sequences = [
+        ('user', 'user_user_id_seq', 'user_id'),
+        ('course', 'course_course_id_seq', 'course_id'),
+        ('quiz', 'quiz_quiz_id_seq', 'quiz_id'),
+        ('quiz_question', 'quiz_question_question_id_seq', 'question_id'),
+        ('quiz_attempt', 'quiz_attempt_attempt_id_seq', 'attempt_id'),
+        ('quiz_attempt_detail', 'quiz_attempt_detail_detail_id_seq', 'detail_id'),
+        ('assignment', 'assignment_assignment_id_seq', 'assignment_id'),
+        ('submission', 'submission_submission_id_seq', 'submission_id'),
+        ('materials', 'materials_materials_id_seq', 'materials_id'),
+        ('message', 'message_message_id_seq', 'message_id'),
+        ('feedback', 'feedback_feedback_id_seq', 'feedback_id'),
+        ('course_rating', 'course_rating_rating_id_seq', 'rating_id'),
+        ('grade', 'grade_grade_id_seq', 'grade_id'),
+        ('enroll', 'enroll_enroll_id_seq', 'enroll_id'),
+        ('attendance_record', 'attendance_record_record_id_seq', 'record_id'),
+        ('attendance_detail', 'attendance_detail_detail_id_seq', 'detail_id'),
+        ('prediction', 'prediction_prediction_id_seq', 'prediction_id'),
+        ('activity_log', 'activity_log_log_id_seq', 'log_id'),
+    ]
+    
+    for table_name, sequence_name, id_column in tables_and_sequences:
+        try:
+            # Get the max ID from the table
+            result = session.execute(text(
+                f"SELECT COALESCE(MAX({id_column}), 0) FROM {table_name}"
+            )).fetchone()
+            max_id = result[0] if result else 0
+            
+            # Set sequence to max_id + 1
+            next_val = max_id + 1
+            session.execute(text(f"SELECT setval('{sequence_name}', {next_val}, false)"))
+            print(f"  Fixed {sequence_name}: next value = {next_val}")
+        except Exception as e:
+            print(f"  Warning: Could not fix {sequence_name}: {e}")
+    
+    session.commit()
+    print("All sequences fixed!")
+
+
 def main():
     print("=" * 50)
     print("LMS Sample Data Generation Script")
@@ -1832,6 +1878,9 @@ def main():
         generate_feedback(session, enrollments, fixed_ids=fixed_ids)
         generate_course_ratings(session, enrollments, fixed_ids=fixed_ids)
         generate_materials(session, course_ids)
+        
+        # Fix all database sequences to prevent ID conflicts
+        fix_sequences(session)
         
         print("\n" + "=" * 50)
         print("Sample data generation completed successfully!")

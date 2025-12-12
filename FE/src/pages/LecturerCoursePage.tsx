@@ -210,6 +210,7 @@ export default function LecturerCoursePage() {
           description: addDescription || undefined,
           duration_minutes: parseInt(addDuration) || 30,
           max_attempts: parseInt(addMaxAttempts) || 1,
+          start_time: new Date().toISOString(), // Make quiz available immediately
           end_time: addDeadline || undefined,
         });
         
@@ -245,9 +246,10 @@ export default function LecturerCoursePage() {
       });
       
       alert(`${addType === "assignment" ? "Assignment" : "Quiz"} created successfully!`);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to create", err);
-      alert("Failed to create. Please try again.");
+      const errorMsg = err.response?.data?.detail || err.message || "Failed to create. Please try again.";
+      alert(`Failed to create: ${errorMsg}`);
     } finally {
       setAddSubmitting(false);
     }
