@@ -1844,6 +1844,119 @@ def fix_sequences(session):
     session.commit()
     print("All sequences fixed!")
 
+def semester_start_date(semester: str) -> date:
+    """
+    semester dạng: '2023-1', '2023-2', '2023-3'
+    Quy ước:
+      - kỳ 1: Sep (năm đó)
+      - kỳ 2: Jan (năm sau)
+      - kỳ 3: Jun (năm sau)
+    """
+    year_str, sem_str = semester.split("-")
+    y = int(year_str)
+    s = int(sem_str)
+
+    if s == 1:
+        return date(y, 9, 1)
+    if s == 2:
+        return date(y + 1, 1, 1)
+    # s == 3
+    return date(y + 1, 6, 1)
+
+def generate_attendance(session, enrollments, fixed_ids=None, sessions_per_course=(10, 14)):
+    """
+    Seed AttendanceRecord + AttendanceDetail dựa vào enrollments.
+
+    - Chỉ tạo attendance cho các course thực sự có enrollments
+    - Mỗi course có 10-14 buổi (random)
+    - fixed_ids: dict chứa student1/student2 để áp kịch bản riêng
+      ví dụ: {"student1": 1, "student2": 2}
+    """
+    print("Generating attendance records...")
+
+    if not enrollments:
+        print("Không có enrollments, bỏ qua generate_attendance.")
+        return
+
+    # course_id -> list student_id
+    course_students = {}
+    for student_id, course_id in enrollments:
+        course_students.setdefault(course_id, set()).add(student_id)
+
+    # lấy semester từ DB để sinh lịch đúng kỳ
+    enrolled_course_ids = list(course_students.keys())
+    courses = session.query(Course).filter(Course.course_id.in_(enrolled_course_ids)).all()
+    course_by_id = {c.course_id: c for c in courses}
+
+    student1_id = fixed_ids.get("student1") if fixed_ids else None
+    student2_id = fixed_ids.get("student2") if fixed_ids else None
+
+    def pick_status(student_id: int) -> str:
+        # Kịch bản riêng
+        if student_id == student1_id:
+            # student1 chăm: 88% present, 10% late, 2% absent
+            r = random.random()
+            if r < 0.88: return "present"
+            if r < 0.98: return "late"
+            return "absent"
+
+        if student_id == student2_id:
+            # student2 trung bình: 75% present, 15% late, 10% absent
+            r = random.random()
+            if r < 0.75: return "present"
+            if r < 0.90: return "late"
+            return "absent"
+
+        # student khác: random realistic
+        return random.choices(
+            population=["present", "late", "absent"],
+            weights=[0.78, 0.12, 0.10],
+            k=1
+        )[0]
+
+    records_created = 0
+    details_created = 0
+
+    for course_id, students_set in course_students.items():
+        course = course_by_id.get(course_id)
+        if not course:
+            continue
+
+        sem = course.semester  # lấy đúng semester của course trong DB
+        start = semester_start_date(sem)
+
+        # chọn thứ học cố định cho course này (Mon/Wed/Fri)
+        weekday = random.choice([0, 2, 4])  # 0=Mon
+        # tìm ngày đầu tiên rơi vào weekday
+        first_day = start + timedelta(days=(weekday - start.weekday()) % 7)
+
+        num_sessions = random.randint(sessions_per_course[0], sessions_per_course[1])
+
+        for k in range(num_sessions):
+            class_date = first_day + timedelta(days=7 * k)
+
+            record = AttendanceRecord(
+                course_id=course_id,
+                date=class_date,
+                created_at=datetime.utcnow()
+            )
+            session.add(record)
+            session.flush()  # để lấy record.record_id
+
+            records_created += 1
+
+            for student_id in students_set:
+                detail = AttendanceDetail(
+                    record_id=record.record_id,
+                    student_id=student_id,
+                    status=pick_status(student_id)
+                )
+                session.add(detail)
+                details_created += 1
+
+    session.commit()
+    print(f"Created {records_created} attendance records and {details_created} attendance details")
+
 
 def main():
     print("=" * 50)
@@ -1870,6 +1983,7 @@ def main():
         }
         course_ids = generate_courses(session, lecturer_user_ids)
         enrollments = generate_enrollments(session, student_user_ids, course_ids, fixed_ids=fixed_ids)
+        generate_attendance(session, enrollments, fixed_ids=fixed_ids)
         assignment_data = generate_assignments(session, course_ids)
         generate_submissions(session, assignment_data, enrollments, fixed_ids=fixed_ids)
         quiz_ids = generate_quizzes_and_questions(session, course_ids)
