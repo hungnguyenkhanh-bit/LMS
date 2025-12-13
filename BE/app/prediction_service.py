@@ -131,7 +131,6 @@ class PredictionService:
                 features_array = self._scaler.transform(features_df)
 
             predicted_gpa = float(self._model.predict(features_array)[0])
-            print("DEBUG:predicted_gpa", predicted_gpa)
 
             # Clamp GPA to valid range [0.0, 4.0]
             predicted_gpa = max(0.0, min(4.0, predicted_gpa))
@@ -195,10 +194,11 @@ class PredictionService:
         confidence = 0.75
 
         # Extract key features (assuming default feature order)
-        if features.shape[1] >= 7:
-            attendance_rate = features[0, 1]
-            avg_quiz_score = features[0, 2]
-            assignment_score = features[0, 3]
+        if features.shape[1] >= 4:
+            attendance_rate = features[0, 0]
+            avg_quiz_score = features[0, 1]
+            assignment_score = features[0, 2]
+            study_hours_per_week = features[0, 3]
 
             # Adjust confidence based on data quality indicators
 
@@ -209,7 +209,7 @@ class PredictionService:
                 confidence -= 0.1
 
             # Consistency between quiz and assignment scores
-            score_consistency = 1.0 - abs(avg_quiz_score - assignment_score) / 100.0
+            score_consistency = 1.0 - abs(avg_quiz_score - assignment_score)
             confidence += score_consistency * 0.1
 
         return min(1.0, max(0.5, confidence))
