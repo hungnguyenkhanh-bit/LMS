@@ -62,7 +62,6 @@ class PredictionService:
                     "feature_names", self._get_default_features()
                 )
             else:
-                print("DEBUGGING: Model data is not a dictionary")
                 # If the pickle contains just the model
                 self._model = model_data
                 self._scaler = None
@@ -134,7 +133,6 @@ class PredictionService:
             else:
                 # No scaling - predict directly with DataFrame
                 predicted_gpa = float(self._model.predict(features_df)[0])
-            print("DEBUGGING: Predicted GPA", predicted_gpa)
 
             # Clamp GPA to valid range [0.0, 4.0]
             predicted_gpa = max(0.0, min(4.0, predicted_gpa))
