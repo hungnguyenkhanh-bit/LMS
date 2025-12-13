@@ -130,43 +130,14 @@ class PredictionService:
                 features_df = pd.DataFrame(features_array, columns=self._feature_names)
                 features_array = self._scaler.transform(features_df)
 
-            # Check if this is a classifier or regressor
-            if hasattr(self._model, "predict_proba"):
-                # This is a classifier (e.g., LogisticRegression)
-                # Get probability of passing
-                probabilities = self._model.predict_proba(features_array)[0]
+            predicted_gpa = float(self._model.predict(features_array)[0])
+            print("DEBUG:predicted_gpa", predicted_gpa)
 
-                # Get class labels
-                classes = self._model.classes_
+            # Clamp GPA to valid range [0.0, 4.0]
+            predicted_gpa = max(0.0, min(4.0, predicted_gpa))
 
-                # Find probability of "Pass" class
-                try:
-                    pass_idx = list(classes).index("Pass")
-                    pass_probability = probabilities[pass_idx]
-                except (ValueError, IndexError):
-                    # If "Pass" not found, try index 1 (assuming binary classification)
-                    pass_probability = (
-                        probabilities[1] if len(probabilities) > 1 else probabilities[0]
-                    )
-
-                # Convert probability to estimated GPA
-                # Pass probability of 1.0 -> GPA 4.0
-                # Pass probability of 0.5 -> GPA 2.0 (threshold)
-                # Pass probability of 0.0 -> GPA 0.0
-                predicted_gpa = pass_probability * 4.0
-
-                # Confidence is the maximum probability
-                confidence = float(np.max(probabilities))
-
-            else:
-                # This is a regressor - predict GPA directly
-                predicted_gpa = float(self._model.predict(features_array)[0])
-
-                # Clamp GPA to valid range [0.0, 4.0]
-                predicted_gpa = max(0.0, min(4.0, predicted_gpa))
-
-                # Calculate confidence score
-                confidence = self._calculate_confidence(features_array, predicted_gpa)
+            # Calculate confidence score
+            confidence = self._calculate_confidence(features_array, predicted_gpa)
 
             return predicted_gpa, confidence
 
