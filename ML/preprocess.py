@@ -7,6 +7,7 @@ import pickle
 from sklearn.preprocessing import LabelEncoder
 from sklearn.ensemble import RandomForestRegressor
 
+MODEL_PATH = "..\\BE\\app\\models\\student_prediction_model.pkl"
 df = pd.read_csv("data/student_gpa_dataset_new.csv")
 
 dropped_columns = ["student_id"]
@@ -24,14 +25,11 @@ print(df.head())
 X = df[features]
 y = df["gpa"]
 
-# One-hot encode the categorical features
-
-
-scaler = StandardScaler()
-X = scaler.fit_transform(X)
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42
 )
+
+print(X_train)
 
 model = RandomForestRegressor(
     n_estimators=100,
@@ -43,11 +41,9 @@ model = RandomForestRegressor(
 
 model.fit(X_train, y_train)
 predictions = model.predict(X_test)
-print("predictions", predictions)
-print(model.score(X_test, y_test))
 
 # Save model and scaler together with metadata
-model_data = {"model": model, "scaler": scaler, "feature_names": features}
+# model_data = {"model": model, "scaler": scaler, "feature_names": features}
 
 filename = "..\\BE\\app\\models\\student_prediction_model.pkl"
 with open(filename, "wb") as file:

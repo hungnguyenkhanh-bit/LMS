@@ -84,12 +84,13 @@ class PredictionService:
     def _get_default_features(self) -> List[str]:
         """
         Return default feature names based on common academic prediction features.
-        These should match the order used during model training.
+        These should match the EXACT names used during model training.
+        NOTE: The CSV uses 'assignment_grade', not 'assignment_score'
         """
         return [
             "attendance_rate",
             "avg_quiz_score",
-            "assignment_score",
+            "assignment_grade",  # Must match CSV column name
             "study_hours_per_week",
         ]
 
@@ -121,23 +122,25 @@ class PredictionService:
             )
 
         try:
-            # Reshape for sklearn (expects 2D array)
-            features_array = np.array(features).reshape(1, -1)
+            # Convert to DataFrame with feature names to match training format
+            # The model was trained on a DataFrame, so we need to predict with the same format
+            features_df = pd.DataFrame([features], columns=self._feature_names)
 
             # Apply scaling if scaler is available
             if self._scaler is not None:
-                # Convert to DataFrame with feature names to avoid sklearn warning
-                features_df = pd.DataFrame(features_array, columns=self._feature_names)
-                features_array = self._scaler.transform(features_df)
-
-            predicted_gpa = float(self._model.predict(features_array)[0])
-            print("DEBUG:predicted_gpa", predicted_gpa)
+                features_scaled = self._scaler.transform(features_df)
+                predicted_gpa = float(self._model.predict(features_scaled)[0])
+            else:
+                # No scaling - predict directly with DataFrame
+                predicted_gpa = float(self._model.predict(features_df)[0])
 
             # Clamp GPA to valid range [0.0, 4.0]
             predicted_gpa = max(0.0, min(4.0, predicted_gpa))
 
-            # Calculate confidence score
-            confidence = self._calculate_confidence(features_array, predicted_gpa)
+            # Calculate confidence score (pass original features as array for heuristic)
+            confidence = self._calculate_confidence(
+                np.array(features).reshape(1, -1), predicted_gpa
+            )
 
             return predicted_gpa, confidence
 
@@ -195,10 +198,11 @@ class PredictionService:
         confidence = 0.75
 
         # Extract key features (assuming default feature order)
-        if features.shape[1] >= 7:
-            attendance_rate = features[0, 1]
-            avg_quiz_score = features[0, 2]
-            assignment_score = features[0, 3]
+        if features.shape[1] >= 4:
+            attendance_rate = features[0, 0]
+            avg_quiz_score = features[0, 1]
+            assignment_grade = features[0, 2]
+            study_hours_per_week = features[0, 3]
 
             # Adjust confidence based on data quality indicators
 
@@ -209,7 +213,7 @@ class PredictionService:
                 confidence -= 0.1
 
             # Consistency between quiz and assignment scores
-            score_consistency = 1.0 - abs(avg_quiz_score - assignment_score) / 100.0
+            score_consistency = 1.0 - abs(avg_quiz_score - assignment_grade)
             confidence += score_consistency * 0.1
 
         return min(1.0, max(0.5, confidence))
@@ -248,7 +252,7 @@ class PredictionService:
         # Extract features
         attendance_rate = features_dict.get("attendance_rate", 0)
         avg_quiz_score = features_dict.get("avg_quiz_score", 0)
-        assignment_score = features_dict.get("assignment_score", 0)
+        assignment_grade = features_dict.get("assignment_grade", 0)
         study_hours = features_dict.get("study_hours_per_week", 0)
 
         # Generate targeted recommendations
@@ -269,9 +273,9 @@ class PredictionService:
                 "Review lecture materials regularly and practice with sample questions."
             )
 
-        if assignment_score < 70:
+        if assignment_grade < 70:
             recommendations.append(
-                f"✍️ Improve assignment quality: Your average assignment score is {assignment_score:.1f}%. "
+                f"✍️ Improve assignment quality: Your average assignment grade is {assignment_grade:.1f}%. "
                 "Start assignments early and seek help from lecturers or peers when needed."
             )
 
@@ -342,10 +346,11 @@ def predict_student_outcome(
     service = get_prediction_service()
 
     # Build features list in correct order
+    # NOTE: No normalization applied - model was trained on raw values
     features = [
         attendance_rate,
-        avg_quiz_score / 100.0,  # Normalize to 0-1
-        assignment_score / 100.0,  # Normalize to 0-1
+        avg_quiz_score,  # Raw value (0-100)
+        assignment_score,  # Raw value (0-100)
         study_hours_per_week,
     ]
 
@@ -357,7 +362,7 @@ def predict_student_outcome(
     features_dict = {
         "attendance_rate": attendance_rate,
         "avg_quiz_score": avg_quiz_score,
-        "assignment_score": assignment_score,
+        "assignment_grade": assignment_score,  # Map API parameter to model feature name
         "study_hours_per_week": study_hours_per_week,
     }
 

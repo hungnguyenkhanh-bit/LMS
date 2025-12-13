@@ -256,7 +256,6 @@ const StudentDashboardPage: React.FC = () => {
             );
             break;
           case 422:
-            return error.response.data.detail;
             setPredictionError("Invalid input data. Please check your values.");
             break;
           case 500:
