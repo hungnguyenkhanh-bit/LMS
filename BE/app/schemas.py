@@ -94,15 +94,18 @@ class DashboardStats(BaseModel):
     target_gpa: Optional[float] = None
     recommendations: Optional[str] = None
 
+
 # GPA history cho từng kỳ
 class GPAHistoryPoint(BaseModel):
-    semester: str          # "2022-1"
-    semester_gpa: float    # GPA của kỳ đó
-    overall_gpa: float     # GPA tích lũy tới kỳ đó
+    semester: str  # "2022-1"
+    semester_gpa: float  # GPA của kỳ đó
+    overall_gpa: float  # GPA tích lũy tới kỳ đó
+
 
 class GPAHistoryResponse(BaseModel):
     entrance_year: int
     points: list[GPAHistoryPoint]
+
 
 # ============ Lecturer Schemas ============
 class LecturerProfile(BaseModel):
@@ -256,6 +259,7 @@ class Submission(BaseModel):
 
 class SubmissionWithDetails(Submission):
     """Submission with additional assignment details"""
+
     assignment_title: Optional[str] = None
     assignment_deadline: Optional[datetime] = None
     max_score: float = 100.0
@@ -549,6 +553,11 @@ class CourseDetail(CourseSummary):
 
 # ============ Prediction Schemas ============
 class Prediction(BaseModel):
+    """
+    Database schema for stored predictions.
+    This represents a prediction record in the database.
+    """
+
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
@@ -559,6 +568,81 @@ class Prediction(BaseModel):
     recommendations: Optional[str] = None
     target_gpa: Optional[float] = None
     created_at: Optional[datetime] = None
+
+
+class PredictionInput(BaseModel):
+    """
+    Request schema for prediction API endpoint.
+    This defines what data the API expects when a user requests a prediction.
+
+    All fields are required and validated:
+    - current_gpa: Must be between 0.0 and 4.0
+    - attendance_rate: Must be between 0.0 and 1.0 (0.85 = 85%)
+    - avg_quiz_score: Must be between 0 and 100
+    - avg_assignment_score: Must be between 0 and 100
+    - late_submissions: Must be 0 or positive
+    - courses_enrolled: Must be at least 1
+    - study_hours_per_week: Must be 0 or positive
+
+    Example request:
+    {
+        "current_gpa": 3.0,
+        "attendance_rate": 0.85,
+        "avg_quiz_score": 75.0,
+        "avg_assignment_score": 80.0,
+        "late_submissions": 2,
+        "courses_enrolled": 5,
+        "study_hours_per_week": 12.0
+    }
+    """
+    attendance_rate: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Attendance rate as decimal (0.85 = 85% attendance)",
+    )
+    avg_quiz_score: float = Field(
+        ..., ge=0.0, le=100.0, description="Average quiz score (0-100)"
+    )
+    assignment_score: float = Field(
+        ..., ge=0.0, le=100.0, description="Average assignment score (0-100)"
+    )
+    study_hours_per_week: float = Field(
+        ..., ge=0.0, description="Average study hours per week"
+    )
+
+
+class PredictionResult(BaseModel):
+    """
+    Response schema for prediction API endpoint.
+    This defines what data the API returns after making a prediction.
+
+    This is different from the Prediction (database) schema because:
+    - It includes computed fields like 'pass_fail' status
+    - It doesn't include database metadata (id, user_id, created_at)
+    - It's optimized for frontend display
+
+    Example response:
+    {
+        "predicted_gpa": 3.25,
+        "confidence": 0.85,
+        "pass_fail": "pass",
+        "threshold": 2.0,
+        "recommendations": "✅ You're on track to pass...",
+        "model_version": "v1.0"
+    }
+    """
+
+    predicted_gpa: float = Field(..., description="Predicted GPA (0.0-4.0)")
+    confidence: float = Field(
+        ..., ge=0.0, le=1.0, description="Confidence score (0.0-1.0)"
+    )
+    pass_fail: str = Field(..., description="Pass or fail status based on threshold")
+    threshold: float = Field(..., description="GPA threshold used for pass/fail")
+    recommendations: str = Field(
+        ..., description="Personalized recommendations for improvement"
+    )
+    model_version: str = Field(..., description="ML model version used")
 
 
 # ============ User List Schemas (for messages, etc.) ============
