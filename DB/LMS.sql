@@ -279,3 +279,9 @@ CREATE INDEX idx_quiz_course ON quiz(course_id);
 CREATE INDEX idx_grade_student ON grade(student_id);
 CREATE INDEX idx_message_sender ON message(sender_id);
 CREATE INDEX idx_message_receiver ON message(receiver_id);
+
+SELECT setval(
+  pg_get_serial_sequence('quiz_question', 'question_id'),
+  COALESCE((SELECT MAX(question_id) FROM quiz_question), 0) + 1,
+  false
+);
