@@ -527,12 +527,12 @@ def create_prediction_for_student(
 
     # Step 2: Build feature vector (must match model's expected order)
     # The model expects features in this specific order:
-    # [current_gpa, attendance_rate, avg_quiz_score, avg_assignment_score,
-    #  late_submissions, courses_enrolled, study_hours_per_week]
+    # [attendance_rate, avg_quiz_score, assignment_score, study_hours_per_week]
+    # NOTE: Model was trained on raw values (0-100 for scores), no normalization needed
     features = [
         input_data.attendance_rate,
-        input_data.avg_quiz_score / 100.0,  # Normalize to 0-1 range
-        input_data.assignment_score / 100.0,  # Normalize to 0-1 range
+        input_data.avg_quiz_score,  # Raw value (0-100)
+        input_data.assignment_score,  # Raw value (0-100)
         input_data.study_hours_per_week,
     ]
 
@@ -551,7 +551,7 @@ def create_prediction_for_student(
     features_dict = {
         "attendance_rate": input_data.attendance_rate,
         "avg_quiz_score": input_data.avg_quiz_score,
-        "assignment_score": input_data.assignment_score,
+        "assignment_grade": input_data.assignment_score,  # Map API field to model feature name
         "study_hours_per_week": input_data.study_hours_per_week,
     }
 
